@@ -18,9 +18,9 @@ export function StatusChip({
   className,
 }: {
   label: string;
-  tone?: Tone;
+  tone?: Tone | undefined;
   dot?: boolean;
-  className?: string;
+  className?: string | undefined;
 }) {
   return (
     <span
