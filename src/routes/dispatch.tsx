@@ -76,7 +76,7 @@ function DispatchPage() {
         <div className="space-y-4">
           <Panel
             title={selected ? `Recommendations · ${selected.reference}` : "Recommendations"}
-            description={selected?.purpose}
+            {...(selected?.purpose ? { description: selected.purpose } : {})}
             action={
               selected && (
                 <Link

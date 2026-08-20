@@ -33,7 +33,10 @@ function RequestDetailPage() {
   const [reason, setReason] = useState("");
 
   const request = data?.request;
-  const trip = request?.trips?.[0];
+  const tripRel = request?.trips as unknown;
+  const trip = (Array.isArray(tripRel) ? tripRel[0] : tripRel) as
+    | (NonNullable<typeof request>["trips"] extends Array<infer T> ? T : NonNullable<typeof request>["trips"])
+    | undefined;
   const history = useTripHistory(trip?.id);
   const audit = useAuditTrail(requestId);
 
