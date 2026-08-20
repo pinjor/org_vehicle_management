@@ -19,6 +19,9 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+const DEMO_EMAIL = "dispatcher@demo-fleet.com";
+const DEMO_PASSWORD = "Demo1234!";
+
 function AuthPage() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
@@ -106,6 +109,27 @@ function AuthPage() {
           >
             {mode === "signin" ? "No account yet? Create one" : "Already registered? Sign in"}
           </button>
+          <div className="rounded-md border border-dashed border-border bg-muted/40 p-3 text-xs">
+            <p className="font-semibold text-foreground">Demo credentials</p>
+            <p className="mt-1 text-muted-foreground">
+              Email: <span className="font-medium text-foreground">{DEMO_EMAIL}</span>
+              <br />
+              Password: <span className="font-medium text-foreground">{DEMO_PASSWORD}</span>
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2 w-full"
+              onClick={() => {
+                setMode("signin");
+                setEmail(DEMO_EMAIL);
+                setPassword(DEMO_PASSWORD);
+              }}
+            >
+              Use demo account
+            </Button>
+          </div>
         </form>
       </div>
     </div>
