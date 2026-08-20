@@ -872,7 +872,7 @@ export type Database = {
       advance_trip: {
         Args: {
           _action: string
-          _actor: string
+          _actor?: string
           _payload?: Json
           _trip_id: string
         }
@@ -880,7 +880,7 @@ export type Database = {
       }
       assign_request: {
         Args: {
-          _actor: string
+          _actor?: string
           _driver_id: string
           _request_id: string
           _vehicle_id: string
