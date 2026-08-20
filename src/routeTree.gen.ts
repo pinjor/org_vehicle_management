@@ -13,6 +13,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DispatchRouteImport } from './routes/dispatch'
+import { Route as DriversRouteImport } from './routes/drivers'
+import { Route as FleetRouteImport } from './routes/fleet'
 import { Route as RequestsIndexRouteImport } from './routes/requests/index'
 import { Route as RequestsRequestIdRouteImport } from './routes/requests/$requestId'
 import { Route as RequestsNewRouteImport } from './routes/requests/new'
@@ -37,6 +39,16 @@ const DispatchRoute = DispatchRouteImport.update({
   path: '/dispatch',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DriversRoute = DriversRouteImport.update({
+  id: '/drivers',
+  path: '/drivers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FleetRoute = FleetRouteImport.update({
+  id: '/fleet',
+  path: '/fleet',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RequestsIndexRoute = RequestsIndexRouteImport.update({
   id: '/requests/',
   path: '/requests/',
@@ -58,6 +70,8 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/dashboard': typeof DashboardRoute
   '/dispatch': typeof DispatchRoute
+  '/drivers': typeof DriversRoute
+  '/fleet': typeof FleetRoute
   '/requests/$requestId': typeof RequestsRequestIdRoute
   '/requests/new': typeof RequestsNewRoute
   '/requests/': typeof RequestsIndexRoute
@@ -67,6 +81,8 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/dashboard': typeof DashboardRoute
   '/dispatch': typeof DispatchRoute
+  '/drivers': typeof DriversRoute
+  '/fleet': typeof FleetRoute
   '/requests/$requestId': typeof RequestsRequestIdRoute
   '/requests/new': typeof RequestsNewRoute
   '/requests': typeof RequestsIndexRoute
@@ -77,6 +93,8 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/dashboard': typeof DashboardRoute
   '/dispatch': typeof DispatchRoute
+  '/drivers': typeof DriversRoute
+  '/fleet': typeof FleetRoute
   '/requests/$requestId': typeof RequestsRequestIdRoute
   '/requests/new': typeof RequestsNewRoute
   '/requests/': typeof RequestsIndexRoute
@@ -88,6 +106,8 @@ export interface FileRouteTypes {
     | '/auth'
     | '/dashboard'
     | '/dispatch'
+    | '/drivers'
+    | '/fleet'
     | '/requests/$requestId'
     | '/requests/new'
     | '/requests/'
@@ -97,6 +117,8 @@ export interface FileRouteTypes {
     | '/auth'
     | '/dashboard'
     | '/dispatch'
+    | '/drivers'
+    | '/fleet'
     | '/requests/$requestId'
     | '/requests/new'
     | '/requests'
@@ -106,6 +128,8 @@ export interface FileRouteTypes {
     | '/auth'
     | '/dashboard'
     | '/dispatch'
+    | '/drivers'
+    | '/fleet'
     | '/requests/$requestId'
     | '/requests/new'
     | '/requests/'
@@ -116,6 +140,8 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   DashboardRoute: typeof DashboardRoute
   DispatchRoute: typeof DispatchRoute
+  DriversRoute: typeof DriversRoute
+  FleetRoute: typeof FleetRoute
   RequestsRequestIdRoute: typeof RequestsRequestIdRoute
   RequestsNewRoute: typeof RequestsNewRoute
   RequestsIndexRoute: typeof RequestsIndexRoute
@@ -151,6 +177,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DispatchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/drivers': {
+      id: '/drivers'
+      path: '/drivers'
+      fullPath: '/drivers'
+      preLoaderRoute: typeof DriversRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fleet': {
+      id: '/fleet'
+      path: '/fleet'
+      fullPath: '/fleet'
+      preLoaderRoute: typeof FleetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/requests/': {
       id: '/requests/'
       path: '/requests'
@@ -180,6 +220,8 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   DashboardRoute: DashboardRoute,
   DispatchRoute: DispatchRoute,
+  DriversRoute: DriversRoute,
+  FleetRoute: FleetRoute,
   RequestsRequestIdRoute: RequestsRequestIdRoute,
   RequestsNewRoute: RequestsNewRoute,
   RequestsIndexRoute: RequestsIndexRoute,
