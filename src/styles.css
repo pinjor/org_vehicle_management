@@ -4,6 +4,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
 /*
  * Design system definition.
  *
@@ -59,42 +64,62 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --shadow-card: var(--shadow-card);
+  --shadow-raised: var(--shadow-raised);
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
+  --radius: 0.75rem;
+  --background: oklch(0.985 0.003 247);
+  --foreground: oklch(0.24 0.035 262);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.972 0.005 250);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
+  --card-foreground: oklch(0.24 0.035 262);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
+  --popover-foreground: oklch(0.24 0.035 262);
+  --primary: oklch(0.48 0.16 264);
+  --primary-foreground: oklch(0.99 0.005 250);
+  --secondary: oklch(0.955 0.008 250);
+  --secondary-foreground: oklch(0.32 0.04 262);
+  --muted: oklch(0.962 0.006 250);
+  --muted-foreground: oklch(0.52 0.025 256);
+  --accent: oklch(0.945 0.028 262);
+  --accent-foreground: oklch(0.36 0.09 264);
+  --destructive: oklch(0.56 0.21 25);
+  --destructive-foreground: oklch(0.99 0.005 250);
+  --success: oklch(0.62 0.14 162);
+  --success-foreground: oklch(0.99 0.005 250);
+  --warning: oklch(0.76 0.15 75);
+  --warning-foreground: oklch(0.26 0.05 60);
+  --info: oklch(0.6 0.12 235);
+  --info-foreground: oklch(0.99 0.005 250);
+  --border: oklch(0.915 0.008 252);
+  --input: oklch(0.905 0.01 252);
+  --ring: oklch(0.48 0.16 264);
+  --chart-1: oklch(0.48 0.16 264);
+  --chart-2: oklch(0.62 0.14 162);
+  --chart-3: oklch(0.76 0.15 75);
+  --chart-4: oklch(0.6 0.12 235);
+  --chart-5: oklch(0.56 0.13 320);
+  --sidebar: oklch(0.23 0.04 264);
+  --sidebar-foreground: oklch(0.86 0.015 255);
+  --sidebar-primary: oklch(0.62 0.16 264);
+  --sidebar-primary-foreground: oklch(0.99 0.005 250);
+  --sidebar-accent: oklch(0.29 0.045 264);
+  --sidebar-accent-foreground: oklch(0.97 0.005 250);
+  --sidebar-border: oklch(0.32 0.04 264);
+  --sidebar-ring: oklch(0.62 0.16 264);
+  --shadow-card: 0 1px 2px oklch(0.24 0.035 262 / 0.05), 0 1px 3px oklch(0.24 0.035 262 / 0.04);
+  --shadow-raised: 0 12px 32px -12px oklch(0.24 0.035 262 / 0.22);
 }
 
 .dark {
@@ -140,5 +165,22 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
   }
+
+  h1, h2, h3, h4 {
+    letter-spacing: -0.015em;
+  }
+}
+
+@utility panel {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+}
+
+@utility num {
+  font-variant-numeric: tabular-nums;
 }
