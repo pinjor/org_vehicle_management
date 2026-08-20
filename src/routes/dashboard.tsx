@@ -1,23 +1,31 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { createFileRouteHelpers } from "@/lib/route-helpers";
+import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
 import { KpiCard, Panel, StatusChip, EmptyState } from "@/components/fleet-ui";
 import { useAuth } from "@/lib/auth";
 import { useActiveTrips, useDrivers, useRequests, useVehicles } from "@/lib/queries";
 import { REQUEST_STATUS, TRIP_STATUS, formatDateTime, relativeTime } from "@/lib/fleet";
-import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/dashboard")({
-  head: () => createFileRouteHelpers(
-    "Operations overview — FleetOps",
-    "Live view of pending vehicle requests, fleet availability and trips in progress.",
-  ),
+  head: () => ({
+    meta: [
+      { title: "Operations overview — FleetOps" },
+      {
+        name: "description",
+        content: "Live view of pending vehicle requests, fleet availability and trips in progress.",
+      },
+      { property: "og:title", content: "Operations overview — FleetOps" },
+      {
+        property: "og:description",
+        content: "Pending requests, vehicle and driver availability, and journeys in progress.",
+      },
+    ],
+  }),
   component: DashboardPage,
 });
 
 function DashboardPage() {
   const { isDispatcher, user } = useAuth();
-  const requests = useRequests(isDispatcher ? undefined : { requesterId: user?.id });
+  const requests = useRequests(isDispatcher || !user ? undefined : { requesterId: user.id });
   const vehicles = useVehicles();
   const drivers = useDrivers();
   const trips = useActiveTrips();
@@ -32,11 +40,6 @@ function DashboardPage() {
     <AppShell
       title="Operations overview"
       subtitle="Requests, availability and journeys happening right now"
-      actions={
-        <Button asChild size="sm">
-          <Link to="/requests/new">New request</Link>
-        </Button>
-      }
     >
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Awaiting action" value={pending.length} hint="Submitted or under review" tone="warning" />
@@ -65,7 +68,7 @@ function DashboardPage() {
             <ul className="divide-y divide-border">
               {rows.slice(0, 8).map((r) => (
                 <li key={r.id}>
-                  <Link to="/requests/$id" params={{ id: r.id }} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2">
+                  <div className="flex items-center gap-3 px-4 py-3">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">
                         {r.reference} · {r.purpose}
@@ -78,7 +81,7 @@ function DashboardPage() {
                       label={REQUEST_STATUS[r.status]?.label ?? r.status}
                       tone={REQUEST_STATUS[r.status]?.tone}
                     />
-                  </Link>
+                  </div>
                 </li>
               ))}
             </ul>
