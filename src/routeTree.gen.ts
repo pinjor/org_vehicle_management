@@ -15,6 +15,8 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DispatchRouteImport } from './routes/dispatch'
 import { Route as DriversRouteImport } from './routes/drivers'
 import { Route as FleetRouteImport } from './routes/fleet'
+import { Route as MaintenanceRouteImport } from './routes/maintenance'
+import { Route as MyTripsRouteImport } from './routes/my-trips'
 import { Route as RequestsIndexRouteImport } from './routes/requests/index'
 import { Route as RequestsRequestIdRouteImport } from './routes/requests/$requestId'
 import { Route as RequestsNewRouteImport } from './routes/requests/new'
@@ -49,6 +51,16 @@ const FleetRoute = FleetRouteImport.update({
   path: '/fleet',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MaintenanceRoute = MaintenanceRouteImport.update({
+  id: '/maintenance',
+  path: '/maintenance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MyTripsRoute = MyTripsRouteImport.update({
+  id: '/my-trips',
+  path: '/my-trips',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RequestsIndexRoute = RequestsIndexRouteImport.update({
   id: '/requests/',
   path: '/requests/',
@@ -72,6 +84,8 @@ export interface FileRoutesByFullPath {
   '/dispatch': typeof DispatchRoute
   '/drivers': typeof DriversRoute
   '/fleet': typeof FleetRoute
+  '/maintenance': typeof MaintenanceRoute
+  '/my-trips': typeof MyTripsRoute
   '/requests/$requestId': typeof RequestsRequestIdRoute
   '/requests/new': typeof RequestsNewRoute
   '/requests/': typeof RequestsIndexRoute
@@ -83,6 +97,8 @@ export interface FileRoutesByTo {
   '/dispatch': typeof DispatchRoute
   '/drivers': typeof DriversRoute
   '/fleet': typeof FleetRoute
+  '/maintenance': typeof MaintenanceRoute
+  '/my-trips': typeof MyTripsRoute
   '/requests/$requestId': typeof RequestsRequestIdRoute
   '/requests/new': typeof RequestsNewRoute
   '/requests': typeof RequestsIndexRoute
@@ -95,6 +111,8 @@ export interface FileRoutesById {
   '/dispatch': typeof DispatchRoute
   '/drivers': typeof DriversRoute
   '/fleet': typeof FleetRoute
+  '/maintenance': typeof MaintenanceRoute
+  '/my-trips': typeof MyTripsRoute
   '/requests/$requestId': typeof RequestsRequestIdRoute
   '/requests/new': typeof RequestsNewRoute
   '/requests/': typeof RequestsIndexRoute
@@ -108,6 +126,8 @@ export interface FileRouteTypes {
     | '/dispatch'
     | '/drivers'
     | '/fleet'
+    | '/maintenance'
+    | '/my-trips'
     | '/requests/$requestId'
     | '/requests/new'
     | '/requests/'
@@ -119,6 +139,8 @@ export interface FileRouteTypes {
     | '/dispatch'
     | '/drivers'
     | '/fleet'
+    | '/maintenance'
+    | '/my-trips'
     | '/requests/$requestId'
     | '/requests/new'
     | '/requests'
@@ -130,6 +152,8 @@ export interface FileRouteTypes {
     | '/dispatch'
     | '/drivers'
     | '/fleet'
+    | '/maintenance'
+    | '/my-trips'
     | '/requests/$requestId'
     | '/requests/new'
     | '/requests/'
@@ -142,6 +166,8 @@ export interface RootRouteChildren {
   DispatchRoute: typeof DispatchRoute
   DriversRoute: typeof DriversRoute
   FleetRoute: typeof FleetRoute
+  MaintenanceRoute: typeof MaintenanceRoute
+  MyTripsRoute: typeof MyTripsRoute
   RequestsRequestIdRoute: typeof RequestsRequestIdRoute
   RequestsNewRoute: typeof RequestsNewRoute
   RequestsIndexRoute: typeof RequestsIndexRoute
@@ -191,6 +217,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FleetRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/maintenance': {
+      id: '/maintenance'
+      path: '/maintenance'
+      fullPath: '/maintenance'
+      preLoaderRoute: typeof MaintenanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/my-trips': {
+      id: '/my-trips'
+      path: '/my-trips'
+      fullPath: '/my-trips'
+      preLoaderRoute: typeof MyTripsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/requests/': {
       id: '/requests/'
       path: '/requests'
@@ -222,6 +262,8 @@ const rootRouteChildren: RootRouteChildren = {
   DispatchRoute: DispatchRoute,
   DriversRoute: DriversRoute,
   FleetRoute: FleetRoute,
+  MaintenanceRoute: MaintenanceRoute,
+  MyTripsRoute: MyTripsRoute,
   RequestsRequestIdRoute: RequestsRequestIdRoute,
   RequestsNewRoute: RequestsNewRoute,
   RequestsIndexRoute: RequestsIndexRoute,
