@@ -12,6 +12,14 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DispatchRouteImport } from './routes/dispatch'
+import { Route as DriversRouteImport } from './routes/drivers'
+import { Route as FleetRouteImport } from './routes/fleet'
+import { Route as MaintenanceRouteImport } from './routes/maintenance'
+import { Route as MyTripsRouteImport } from './routes/my-trips'
+import { Route as RequestsIndexRouteImport } from './routes/requests/index'
+import { Route as RequestsRequestIdRouteImport } from './routes/requests/$requestId'
+import { Route as RequestsNewRouteImport } from './routes/requests/new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +36,141 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DispatchRoute = DispatchRouteImport.update({
+  id: '/dispatch',
+  path: '/dispatch',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DriversRoute = DriversRouteImport.update({
+  id: '/drivers',
+  path: '/drivers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FleetRoute = FleetRouteImport.update({
+  id: '/fleet',
+  path: '/fleet',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MaintenanceRoute = MaintenanceRouteImport.update({
+  id: '/maintenance',
+  path: '/maintenance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MyTripsRoute = MyTripsRouteImport.update({
+  id: '/my-trips',
+  path: '/my-trips',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RequestsIndexRoute = RequestsIndexRouteImport.update({
+  id: '/requests/',
+  path: '/requests/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RequestsRequestIdRoute = RequestsRequestIdRouteImport.update({
+  id: '/requests/$requestId',
+  path: '/requests/$requestId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RequestsNewRoute = RequestsNewRouteImport.update({
+  id: '/requests/new',
+  path: '/requests/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof DashboardRoute
+  '/dispatch': typeof DispatchRoute
+  '/drivers': typeof DriversRoute
+  '/fleet': typeof FleetRoute
+  '/maintenance': typeof MaintenanceRoute
+  '/my-trips': typeof MyTripsRoute
+  '/requests/$requestId': typeof RequestsRequestIdRoute
+  '/requests/new': typeof RequestsNewRoute
+  '/requests/': typeof RequestsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof DashboardRoute
+  '/dispatch': typeof DispatchRoute
+  '/drivers': typeof DriversRoute
+  '/fleet': typeof FleetRoute
+  '/maintenance': typeof MaintenanceRoute
+  '/my-trips': typeof MyTripsRoute
+  '/requests/$requestId': typeof RequestsRequestIdRoute
+  '/requests/new': typeof RequestsNewRoute
+  '/requests': typeof RequestsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof DashboardRoute
+  '/dispatch': typeof DispatchRoute
+  '/drivers': typeof DriversRoute
+  '/fleet': typeof FleetRoute
+  '/maintenance': typeof MaintenanceRoute
+  '/my-trips': typeof MyTripsRoute
+  '/requests/$requestId': typeof RequestsRequestIdRoute
+  '/requests/new': typeof RequestsNewRoute
+  '/requests/': typeof RequestsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/dashboard'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/dashboard'
+    | '/dispatch'
+    | '/drivers'
+    | '/fleet'
+    | '/maintenance'
+    | '/my-trips'
+    | '/requests/$requestId'
+    | '/requests/new'
+    | '/requests/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/dashboard'
-  id: '__root__' | '/' | '/auth' | '/dashboard'
+  to:
+    | '/'
+    | '/auth'
+    | '/dashboard'
+    | '/dispatch'
+    | '/drivers'
+    | '/fleet'
+    | '/maintenance'
+    | '/my-trips'
+    | '/requests/$requestId'
+    | '/requests/new'
+    | '/requests'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/dashboard'
+    | '/dispatch'
+    | '/drivers'
+    | '/fleet'
+    | '/maintenance'
+    | '/my-trips'
+    | '/requests/$requestId'
+    | '/requests/new'
+    | '/requests/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   DashboardRoute: typeof DashboardRoute
+  DispatchRoute: typeof DispatchRoute
+  DriversRoute: typeof DriversRoute
+  FleetRoute: typeof FleetRoute
+  MaintenanceRoute: typeof MaintenanceRoute
+  MyTripsRoute: typeof MyTripsRoute
+  RequestsRequestIdRoute: typeof RequestsRequestIdRoute
+  RequestsNewRoute: typeof RequestsNewRoute
+  RequestsIndexRoute: typeof RequestsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +196,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dispatch': {
+      id: '/dispatch'
+      path: '/dispatch'
+      fullPath: '/dispatch'
+      preLoaderRoute: typeof DispatchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/drivers': {
+      id: '/drivers'
+      path: '/drivers'
+      fullPath: '/drivers'
+      preLoaderRoute: typeof DriversRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fleet': {
+      id: '/fleet'
+      path: '/fleet'
+      fullPath: '/fleet'
+      preLoaderRoute: typeof FleetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/maintenance': {
+      id: '/maintenance'
+      path: '/maintenance'
+      fullPath: '/maintenance'
+      preLoaderRoute: typeof MaintenanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/my-trips': {
+      id: '/my-trips'
+      path: '/my-trips'
+      fullPath: '/my-trips'
+      preLoaderRoute: typeof MyTripsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/requests/': {
+      id: '/requests/'
+      path: '/requests'
+      fullPath: '/requests/'
+      preLoaderRoute: typeof RequestsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/requests/$requestId': {
+      id: '/requests/$requestId'
+      path: '/requests/$requestId'
+      fullPath: '/requests/$requestId'
+      preLoaderRoute: typeof RequestsRequestIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/requests/new': {
+      id: '/requests/new'
+      path: '/requests/new'
+      fullPath: '/requests/new'
+      preLoaderRoute: typeof RequestsNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +259,14 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   DashboardRoute: DashboardRoute,
+  DispatchRoute: DispatchRoute,
+  DriversRoute: DriversRoute,
+  FleetRoute: FleetRoute,
+  MaintenanceRoute: MaintenanceRoute,
+  MyTripsRoute: MyTripsRoute,
+  RequestsRequestIdRoute: RequestsRequestIdRoute,
+  RequestsNewRoute: RequestsNewRoute,
+  RequestsIndexRoute: RequestsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

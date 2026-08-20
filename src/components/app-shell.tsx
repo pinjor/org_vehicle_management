@@ -19,10 +19,22 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { relativeTime } from "@/lib/fleet";
 
-type NavItem = { to: "/dashboard"; label: string; icon: typeof Car; roles: "all" | "dispatch" | "driver" };
+type NavItem = {
+  to: "/dashboard" | "/requests" | "/requests/new" | "/dispatch" | "/fleet" | "/drivers" | "/maintenance" | "/my-trips";
+  label: string;
+  icon: typeof Car;
+  roles: "all" | "dispatch" | "driver";
+};
 
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "Overview", icon: LayoutDashboard, roles: "all" },
+  { to: "/requests", label: "Requests", icon: ClipboardList, roles: "all" },
+  { to: "/requests/new", label: "New request", icon: RouteIcon, roles: "all" },
+  { to: "/dispatch", label: "Dispatch", icon: Radar, roles: "dispatch" },
+  { to: "/my-trips", label: "My trips", icon: CalendarClock, roles: "driver" },
+  { to: "/fleet", label: "Fleet", icon: Car, roles: "dispatch" },
+  { to: "/drivers", label: "Drivers", icon: Users, roles: "dispatch" },
+  { to: "/maintenance", label: "Maintenance", icon: Wrench, roles: "dispatch" },
 ];
 
 export function AppShell({
