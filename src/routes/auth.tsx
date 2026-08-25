@@ -165,7 +165,7 @@ function AuthPage() {
               <>
                 <SignupSteps
                   step={signupStep === "phone" ? 1 : 2}
-                  className="mb-0"
+                  className="auth-steps--signup"
                   onGoToPhone={
                     signupStep === "details"
                       ? () => {
