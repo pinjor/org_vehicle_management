@@ -1,19 +1,58 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "@/lib/api-client";
+import type { LookupsPayload, LookupValue } from "@/lib/lookups";
 import type { Recommendation } from "./fleet";
 
-const REQUEST_SELECT =
-  "*, departments(name, code), vehicles:assigned_vehicle_id(id, name, registration_number, category, seat_capacity, operational_status, has_ac), drivers:assigned_driver_id(id, full_name, phone, current_status, rating), trips(*)";
+const qs = (params: Record<string, string | string[] | undefined>) => {
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined) continue;
+    if (Array.isArray(v)) v.forEach((x) => sp.append(k, x));
+    else sp.set(k, v);
+  }
+  const s = sp.toString();
+  return s ? `?${s}` : "";
+};
 
-export type RequestRow = Awaited<ReturnType<typeof fetchRequests>>[number];
+export type RequestRow = {
+  id: string;
+  reference: string;
+  status: string;
+  purpose: string;
+  priority: string;
+  trip_type: string;
+  passenger_count: number;
+  pickup_at: string;
+  expected_end_at?: string;
+  created_at: string;
+  requester_name: string;
+  requester_phone?: string;
+  requester_id?: string;
+  requested_category?: string;
+  is_round_trip?: boolean;
+  assigned_vehicle_id?: string | null;
+  assigned_driver_id?: string | null;
+  departments?: { name?: string; code?: string } | null;
+  vehicles?: {
+    id?: string;
+    name?: string;
+    registration_number?: string;
+    category?: string;
+    seat_capacity?: number;
+  } | null;
+  drivers?: {
+    id?: string;
+    full_name?: string;
+    phone?: string;
+    current_status?: string;
+  } | null;
+  trips?: { id: string; reference: string; status: string }[];
+};
 
 async function fetchRequests(filters?: { status?: string[]; requesterId?: string }) {
-  let q = supabase.from("vehicle_requests").select(REQUEST_SELECT).order("pickup_at", { ascending: true });
-  if (filters?.status?.length) q = q.in("status", filters.status);
-  if (filters?.requesterId) q = q.eq("requester_id", filters.requesterId);
-  const { data, error } = await q;
-  if (error) throw error;
-  return data ?? [];
+  return apiGet<RequestRow[]>(
+    `/api/requests${qs({ status: filters?.status, requesterId: filters?.requesterId })}`,
+  );
 }
 
 export function useRequests(filters?: { status?: string[]; requesterId?: string }) {
@@ -27,15 +66,8 @@ export function useRequests(filters?: { status?: string[]; requesterId?: string 
 export function useRequest(id: string) {
   return useQuery({
     queryKey: ["request", id],
-    queryFn: async () => {
-      const [req, points, passengers] = await Promise.all([
-        supabase.from("vehicle_requests").select(REQUEST_SELECT).eq("id", id).single(),
-        supabase.from("request_route_points").select("*").eq("request_id", id).order("sequence"),
-        supabase.from("request_passengers").select("*").eq("request_id", id),
-      ]);
-      if (req.error) throw req.error;
-      return { request: req.data, points: points.data ?? [], passengers: passengers.data ?? [] };
-    },
+    queryFn: () => apiGet<{ request: RequestRow; points: unknown[]; passengers: unknown[] }>(`/api/requests/${id}`),
+    refetchInterval: 15_000,
   });
 }
 
@@ -43,15 +75,7 @@ export function useTripHistory(tripId?: string) {
   return useQuery({
     queryKey: ["trip-history", tripId],
     enabled: !!tripId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("trip_status_history")
-        .select("*")
-        .eq("trip_id", tripId!)
-        .order("created_at");
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => apiGet<unknown[]>(`/api/trips/${tripId}/history`),
   });
 }
 
@@ -59,15 +83,7 @@ export function useAuditTrail(entityId?: string) {
   return useQuery({
     queryKey: ["audit", entityId],
     enabled: !!entityId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("audit_logs")
-        .select("*")
-        .eq("entity_id", entityId!)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => apiGet<unknown[]>(`/api/audit/${entityId}`),
   });
 }
 
@@ -75,69 +91,202 @@ export function useRecommendations(requestId?: string, enabled = true) {
   return useQuery({
     queryKey: ["recommendations", requestId],
     enabled: !!requestId && enabled,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_recommendations", { _request_id: requestId! });
-      if (error) throw error;
-      return (data ?? []) as unknown as Recommendation[];
-    },
+    queryFn: () => apiGet<Recommendation[]>(`/api/requests/${requestId}/recommendations`),
   });
 }
+
+export type VehicleRecord = {
+  id: string;
+  registration_number: string;
+  fleet_number: string;
+  name: string;
+  category: string;
+  brand: string;
+  model: string;
+  model_year: number | null;
+  color: string | null;
+  seat_capacity: number;
+  luggage_capacity: number;
+  fuel_type: string;
+  transmission: string;
+  has_ac: boolean;
+  is_vip: boolean;
+  ownership: string;
+  branch: string;
+  odometer_km: number;
+  last_service_km: number;
+  last_service_date: string | null;
+  service_interval_km: number;
+  registration_expiry: string | null;
+  fitness_expiry: string | null;
+  insurance_expiry: string | null;
+  tax_token_expiry: string | null;
+  last_repair_date: string | null;
+  last_repair_summary: string | null;
+  operational_status: string;
+  notes: string | null;
+};
+
+export type DriverRecord = {
+  id: string;
+  user_id: string | null;
+  driver_code: string;
+  full_name: string;
+  email: string | null;
+  phone: string;
+  alternate_phone: string | null;
+  license_number: string;
+  license_type: string;
+  license_expiry: string | null;
+  allowed_categories: string[];
+  experience_years: number;
+  shift: string;
+  current_status: string;
+  blood_group: string | null;
+  emergency_contact: string | null;
+  address: string | null;
+  date_of_joining: string | null;
+  rating: number;
+};
+
+export type TripRecord = {
+  id: string;
+  reference: string;
+  status: string;
+  created_at: string;
+  request_id?: string;
+  vehicle_id?: string;
+  driver_id?: string;
+  current_stop_index?: number;
+  vehicles?: { name: string; registration_number?: string; seat_capacity?: number };
+  drivers?: { full_name: string; phone?: string; driver_code?: string };
+  vehicle_requests?: {
+    id?: string;
+    purpose?: string;
+    pickup_at?: string;
+    reference?: string;
+    passenger_count?: number;
+    is_round_trip?: boolean;
+    request_route_points?: {
+      sequence: number;
+      name: string;
+      address?: string;
+      latitude: number | null;
+      longitude: number | null;
+      point_type: string;
+      expected_at?: string | null;
+    }[];
+  };
+};
 
 export function useVehicles() {
   return useQuery({
     queryKey: ["vehicles"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("vehicles").select("*").order("fleet_number");
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => apiGet<VehicleRecord[]>("/api/vehicles"),
+  });
+}
+
+export function useVehicle(id: string) {
+  return useQuery({
+    queryKey: ["vehicle", id],
+    enabled: !!id,
+    queryFn: () => apiGet<VehicleRecord>(`/api/vehicles/${id}`),
   });
 }
 
 export function useDrivers() {
   return useQuery({
     queryKey: ["drivers"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("drivers").select("*").order("driver_code");
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => apiGet<DriverRecord[]>("/api/drivers"),
+  });
+}
+
+export function useDriver(id: string) {
+  return useQuery({
+    queryKey: ["driver", id],
+    enabled: !!id,
+    queryFn: () => apiGet<DriverRecord>(`/api/drivers/${id}`),
+  });
+}
+
+export function useUpdateVehicle() {
+  const invalidate = useInvalidateFleet();
+  return useMutation({
+    mutationFn: (input: { id: string; patch: Record<string, unknown> }) =>
+      apiPatch<unknown>(`/api/vehicles/${input.id}`, input.patch),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCreateVehicle() {
+  const invalidate = useInvalidateFleet();
+  return useMutation({
+    mutationFn: (input: {
+      registration_number: string;
+      fleet_number: string;
+      name: string;
+      category: string;
+      brand?: string;
+      model?: string;
+      seat_capacity: number;
+      branch?: string;
+    }) => apiPost<unknown>("/api/vehicles", input),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateDriver() {
+  const invalidate = useInvalidateFleet();
+  return useMutation({
+    mutationFn: (input: { id: string; patch: Record<string, unknown> }) =>
+      apiPatch<unknown>(`/api/drivers/${input.id}`, input.patch),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCreateDriver() {
+  const invalidate = useInvalidateFleet();
+  return useMutation({
+    mutationFn: (input: {
+      full_name: string;
+      driver_code: string;
+      phone: string;
+      license_number: string;
+      license_expiry?: string | null;
+      shift?: string;
+      allowed_categories?: string[];
+      experience_years?: number;
+    }) => apiPost<unknown>("/api/drivers", input),
+    onSuccess: invalidate,
+  });
+}
+
+export function useMarkNotificationRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiPatch(`/api/notifications/${id}/read`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["notifications"] }),
   });
 }
 
 export function useLocations() {
   return useQuery({
     queryKey: ["locations"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("locations").select("*").eq("is_active", true).order("name");
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => apiGet<unknown[]>("/api/locations"),
   });
 }
 
 export function useDepartments() {
   return useQuery({
     queryKey: ["departments"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("departments").select("*").order("name");
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => apiGet<unknown[]>("/api/departments"),
   });
 }
 
 export function useUnavailabilityRequests() {
   return useQuery({
     queryKey: ["unavailability"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("vehicle_unavailability_requests")
-        .select("*, vehicles(name, registration_number), drivers(full_name)")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => apiGet<unknown[]>("/api/unavailability"),
   });
 }
 
@@ -146,15 +295,7 @@ export function useNotifications(userId?: string) {
     queryKey: ["notifications", userId],
     enabled: !!userId,
     refetchInterval: 20_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("notifications")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(30);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => apiGet<unknown[]>("/api/notifications"),
   });
 }
 
@@ -163,17 +304,16 @@ export function useDriverTrips(driverId?: string) {
     queryKey: ["driver-trips", driverId],
     enabled: !!driverId,
     refetchInterval: 20_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("trips")
-        .select(
-          "*, vehicles(name, registration_number, seat_capacity), vehicle_requests(*, request_route_points(*), request_passengers(*))",
-        )
-        .eq("driver_id", driverId!)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => apiGet<TripRecord[]>(`/api/trips/driver/${driverId}`),
+  });
+}
+
+export function useVehicleTrips(vehicleId?: string) {
+  return useQuery({
+    queryKey: ["vehicle-trips", vehicleId],
+    enabled: !!vehicleId,
+    refetchInterval: 20_000,
+    queryFn: () => apiGet<TripRecord[]>(`/api/trips/vehicle/${vehicleId}`),
   });
 }
 
@@ -181,15 +321,49 @@ export function useActiveTrips() {
   return useQuery({
     queryKey: ["active-trips"],
     refetchInterval: 20_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("trips")
-        .select("*, vehicles(name, registration_number), drivers(full_name, phone), vehicle_requests(*)")
-        .not("status", "in", "(completed,cancelled)")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () =>
+      apiGet<
+        {
+          id: string;
+          reference: string;
+          status: string;
+          request_id?: string;
+          created_at?: string;
+          vehicles?: { name?: string; registration_number?: string } | null;
+          drivers?: { full_name?: string; phone?: string } | null;
+          vehicle_requests?: {
+            purpose?: string;
+            pickup_at?: string;
+            requester_name?: string;
+          } | null;
+        }[]
+      >("/api/trips/active"),
+  });
+}
+
+export type FleetTripRow = {
+  id: string;
+  reference: string;
+  status: string;
+  created_at: string;
+  completed_at?: string | null;
+  request_id: string;
+  vehicles?: { name?: string; registration_number?: string } | null;
+  drivers?: { full_name?: string; phone?: string } | null;
+  vehicle_requests?: {
+    id?: string;
+    reference?: string;
+    purpose?: string;
+    pickup_at?: string;
+    requester_name?: string;
+  } | null;
+};
+
+export function useFleetTrips(status: "completed" | "active" | "cancelled" | "all" = "completed") {
+  return useQuery({
+    queryKey: ["fleet-trips", status],
+    refetchInterval: status === "active" ? 20_000 : false,
+    queryFn: () => apiGet<FleetTripRow[]>(`/api/trips?status=${status}&limit=150`),
   });
 }
 
@@ -201,13 +375,19 @@ function useInvalidateFleet() {
       "request",
       "recommendations",
       "vehicles",
+      "vehicle",
       "drivers",
+      "driver",
       "active-trips",
+      "fleet-trips",
       "driver-trips",
+      "vehicle-trips",
       "notifications",
       "unavailability",
       "trip-history",
+      "trip-location",
       "audit",
+      "roster",
     ]) {
       void qc.invalidateQueries({ queryKey: [key] });
     }
@@ -217,15 +397,11 @@ function useInvalidateFleet() {
 export function useAssignRequest() {
   const invalidate = useInvalidateFleet();
   return useMutation({
-    mutationFn: async (input: { requestId: string; vehicleId: string; driverId: string }) => {
-      const { data, error } = await supabase.rpc("assign_request", {
-        _request_id: input.requestId,
-        _vehicle_id: input.vehicleId,
-        _driver_id: input.driverId,
-      });
-      if (error) throw new Error(error.message);
-      return data;
-    },
+    mutationFn: (input: { requestId: string; vehicleId: string; driverId: string }) =>
+      apiPost(`/api/requests/${input.requestId}/assign`, {
+        vehicleId: input.vehicleId,
+        driverId: input.driverId,
+      }),
     onSuccess: invalidate,
   });
 }
@@ -233,40 +409,50 @@ export function useAssignRequest() {
 export function useAdvanceTrip() {
   const invalidate = useInvalidateFleet();
   return useMutation({
-    mutationFn: async (input: { tripId: string; action: string; payload?: Record<string, unknown> }) => {
-      const { data, error } = await supabase.rpc("advance_trip", {
-        _trip_id: input.tripId,
-        _action: input.action,
-        _payload: (input.payload ?? {}) as never,
-      });
-      if (error) throw new Error(error.message);
-      return data;
-    },
+    mutationFn: (input: { tripId: string; action: string; payload?: Record<string, unknown> }) =>
+      apiPost(`/api/trips/${input.tripId}/advance`, { action: input.action, payload: input.payload }),
     onSuccess: invalidate,
+  });
+}
+
+export type TripLocationPayload = {
+  latitude: number | null;
+  longitude: number | null;
+  recorded_at: string | null;
+  trail: { lat: number; lng: number; at: string }[];
+};
+
+export function useTripLocation(tripId?: string, enabled = true) {
+  return useQuery({
+    queryKey: ["trip-location", tripId],
+    enabled: !!tripId && enabled,
+    refetchInterval: 5_000,
+    queryFn: () => apiGet<TripLocationPayload>(`/api/trips/${tripId}/location`),
+  });
+}
+
+export function usePingTripLocation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { tripId: string; latitude: number; longitude: number }) =>
+      apiPost(`/api/trips/${input.tripId}/location`, {
+        latitude: input.latitude,
+        longitude: input.longitude,
+      }),
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: ["trip-location", vars.tripId] });
+    },
   });
 }
 
 export function useDecideRequest() {
   const invalidate = useInvalidateFleet();
   return useMutation({
-    mutationFn: async (input: { requestId: string; approve: boolean; reason?: string; actorId: string }) => {
-      const { error } = await supabase
-        .from("vehicle_requests")
-        .update(
-          input.approve
-            ? { status: "approved", approved_by: input.actorId, approved_at: new Date().toISOString() }
-            : { status: "rejected", rejection_reason: input.reason ?? "Not approved" },
-        )
-        .eq("id", input.requestId);
-      if (error) throw new Error(error.message);
-      await supabase.from("audit_logs").insert({
-        entity_type: "vehicle_request",
-        entity_id: input.requestId,
-        action: input.approve ? "approve" : "reject",
-        new_value: { reason: input.reason ?? null },
-        actor_id: input.actorId,
-      });
-    },
+    mutationFn: (input: { requestId: string; approve: boolean; reason?: string; actorId: string }) =>
+      apiPost(`/api/requests/${input.requestId}/decide`, {
+        approve: input.approve,
+        reason: input.reason,
+      }),
     onSuccess: invalidate,
   });
 }
@@ -274,13 +460,7 @@ export function useDecideRequest() {
 export function useCancelRequest() {
   const invalidate = useInvalidateFleet();
   return useMutation({
-    mutationFn: async (requestId: string) => {
-      const { error } = await supabase
-        .from("vehicle_requests")
-        .update({ status: "cancelled" })
-        .eq("id", requestId);
-      if (error) throw new Error(error.message);
-    },
+    mutationFn: (requestId: string) => apiPost(`/api/requests/${requestId}/cancel`),
     onSuccess: invalidate,
   });
 }
@@ -288,7 +468,7 @@ export function useCancelRequest() {
 export function useReportVehicleIssue() {
   const invalidate = useInvalidateFleet();
   return useMutation({
-    mutationFn: async (input: {
+    mutationFn: (input: {
       vehicleId: string;
       driverId?: string | null;
       tripId?: string | null;
@@ -296,25 +476,15 @@ export function useReportVehicleIssue() {
       description: string;
       severity: string;
       actorId: string;
-    }) => {
-      const { error } = await supabase.from("vehicle_unavailability_requests").insert({
-        vehicle_id: input.vehicleId,
-        driver_id: input.driverId ?? null,
-        trip_id: input.tripId ?? null,
+    }) =>
+      apiPost("/api/unavailability", {
+        vehicleId: input.vehicleId,
+        driverId: input.driverId,
+        tripId: input.tripId,
         reason: input.reason,
         description: input.description,
         severity: input.severity,
-        created_by: input.actorId,
-      });
-      if (error) throw new Error(error.message);
-      await supabase.from("notifications").insert({
-        audience_role: "transport_admin",
-        category: "maintenance",
-        title: "Vehicle unavailability requested",
-        body: input.description || "A driver reported a vehicle issue awaiting approval.",
-        link: "/maintenance",
-      });
-    },
+      }),
     onSuccess: invalidate,
   });
 }
@@ -322,47 +492,18 @@ export function useReportVehicleIssue() {
 export function useReviewUnavailability() {
   const invalidate = useInvalidateFleet();
   return useMutation({
-    mutationFn: async (input: {
+    mutationFn: (input: {
       id: string;
       vehicleId: string;
       decision: "approved_unavailable" | "sent_to_maintenance" | "rejected" | "info_requested" | "resolved";
       note?: string;
       actorId: string;
-    }) => {
-      const { error } = await supabase
-        .from("vehicle_unavailability_requests")
-        .update({
-          status: input.decision,
-          admin_note: input.note ?? null,
-          reviewed_by: input.actorId,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq("id", input.id);
-      if (error) throw new Error(error.message);
-
-      const nextVehicleStatus =
-        input.decision === "approved_unavailable"
-          ? "unavailable"
-          : input.decision === "sent_to_maintenance"
-            ? "under_maintenance"
-            : input.decision === "resolved"
-              ? "available"
-              : null;
-      if (nextVehicleStatus) {
-        const { error: vErr } = await supabase
-          .from("vehicles")
-          .update({ operational_status: nextVehicleStatus })
-          .eq("id", input.vehicleId);
-        if (vErr) throw new Error(vErr.message);
-      }
-      await supabase.from("audit_logs").insert({
-        entity_type: "vehicle",
-        entity_id: input.vehicleId,
-        action: `unavailability_${input.decision}`,
-        new_value: { note: input.note ?? null },
-        actor_id: input.actorId,
-      });
-    },
+    }) =>
+      apiPost(`/api/unavailability/${input.id}/review`, {
+        decision: input.decision,
+        note: input.note,
+        vehicleId: input.vehicleId,
+      }),
     onSuccess: invalidate,
   });
 }
@@ -399,79 +540,231 @@ export interface NewRequestInput {
 export function useCreateRequest() {
   const invalidate = useInvalidateFleet();
   return useMutation({
-    mutationFn: async (input: NewRequestInput) => {
-      const { data, error } = await supabase
-        .from("vehicle_requests")
-        .insert({
-          requester_id: input.requesterId,
-          requester_name: input.requesterName,
-          requester_phone: input.requesterPhone,
-          department_id: input.departmentId,
-          cost_center: input.costCenter,
-          purpose: input.purpose,
-          trip_type: input.tripType,
-          priority: input.priority,
-          requested_category: input.requestedCategory,
-          passenger_count: input.passengerCount,
-          journey_date: input.pickupAt.slice(0, 10),
-          pickup_at: new Date(input.pickupAt).toISOString(),
-          expected_end_at: new Date(input.expectedEndAt).toISOString(),
-          is_round_trip: input.isRoundTrip,
-          return_pickup_at: input.returnPickupAt ? new Date(input.returnPickupAt).toISOString() : null,
-          return_expected_end_at: input.returnExpectedEndAt
-            ? new Date(input.returnExpectedEndAt).toISOString()
-            : null,
-          requires_ac: input.requiresAc,
-          special_requirements: input.specialRequirements,
-          remarks: input.remarks,
-          status: "submitted",
-        })
-        .select("id, reference")
-        .single();
-      if (error) throw new Error(error.message);
-
-      if (input.points.length) {
-        const { error: pErr } = await supabase.from("request_route_points").insert(
-          input.points.map((p, i) => ({
-            request_id: data.id,
-            leg: "outbound",
-            sequence: i + 1,
-            point_type: p.point_type,
-            name: p.name,
-            address: p.address,
-            latitude: p.latitude,
-            longitude: p.longitude,
-          })),
-        );
-        if (pErr) throw new Error(pErr.message);
-      }
-      if (input.passengers.length) {
-        await supabase.from("request_passengers").insert(
-          input.passengers.map((p, i) => ({
-            request_id: data.id,
-            full_name: p.full_name,
-            phone: p.phone,
-            passenger_type: p.passenger_type,
-            is_primary: i === 0,
-          })),
-        );
-      }
-      await supabase.from("notifications").insert({
-        audience_role: "transport_admin",
-        category: "request",
-        title: `New vehicle request ${data.reference}`,
-        body: `${input.requesterName} · ${input.passengerCount} passengers`,
-        link: `/requests/${data.id}`,
-      });
-      await supabase.from("audit_logs").insert({
-        entity_type: "vehicle_request",
-        entity_id: data.id,
-        action: "create",
-        actor_id: input.requesterId,
-        actor_name: input.requesterName,
-      });
-      return data;
-    },
+    mutationFn: (input: NewRequestInput) => apiPost<{ id: string; reference: string }>("/api/requests", input),
     onSuccess: invalidate,
+  });
+}
+
+export type RosterEntry = {
+  id: string;
+  full_name: string;
+  phone: string;
+  role: "admin_hr" | "driver" | "employee";
+  user_id: string | null;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RosterLookup = {
+  allowed: boolean;
+  reason?: "invalid_phone" | "not_on_roster" | "already_registered";
+  full_name?: string;
+  role?: RosterEntry["role"];
+};
+
+export function useRoster() {
+  return useQuery({
+    queryKey: ["roster"],
+    queryFn: () => apiGet<RosterEntry[]>("/api/roster"),
+  });
+}
+
+export function useLookupRosterPhone(phoneLocal: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["roster-lookup", phoneLocal],
+    enabled: enabled && phoneLocal.length >= 10,
+    queryFn: () => apiGet<RosterLookup>(`/api/roster/lookup?phone=${encodeURIComponent(phoneLocal)}`),
+    staleTime: 30_000,
+  });
+}
+
+function useInvalidateRosterRelated() {
+  const qc = useQueryClient();
+  return () => {
+    for (const key of ["roster", "admin-employees", "admin-employee", "drivers", "driver"]) {
+      void qc.invalidateQueries({ queryKey: [key] });
+    }
+  };
+}
+
+export function useCreateRosterEntry() {
+  const invalidate = useInvalidateRosterRelated();
+  return useMutation({
+    mutationFn: (input: {
+      full_name: string;
+      phone: string;
+      role: RosterEntry["role"];
+      notes?: string | null;
+    }) => apiPost<RosterEntry>("/api/roster", input),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateRosterEntry() {
+  const invalidate = useInvalidateRosterRelated();
+  return useMutation({
+    mutationFn: (input: { id: string; patch: Partial<Pick<RosterEntry, "role" | "full_name" | "notes">> }) =>
+      apiPatch(`/api/roster/${input.id}`, input.patch),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeactivateRosterEntry() {
+  const invalidate = useInvalidateRosterRelated();
+  return useMutation({
+    mutationFn: (id: string) => apiDelete(`/api/roster/${id}`),
+    onSuccess: invalidate,
+  });
+}
+
+export type AdminEmployee = {
+  roster_id: string;
+  roster_name: string;
+  roster_phone: string;
+  user_id: string | null;
+  notes: string | null;
+  roster_created_at: string;
+  profile_id: string | null;
+  profile_name: string | null;
+  profile_phone: string | null;
+  email: string | null;
+  employee_code: string | null;
+  department_id: string | null;
+  department_name: string | null;
+  department_code: string | null;
+  request_count: number;
+};
+
+export function useAdminEmployees() {
+  return useQuery({
+    queryKey: ["admin-employees"],
+    queryFn: () => apiGet<AdminEmployee[]>("/api/admin/employees"),
+  });
+}
+
+export function useAdminEmployee(profileId: string) {
+  return useQuery({
+    queryKey: ["admin-employee", profileId],
+    enabled: !!profileId,
+    queryFn: () =>
+      apiGet<{
+        profile: UserProfile & { department_name?: string; department_code?: string };
+        requests: { id: string; reference: string; purpose: string; status: string; pickup_at: string; passenger_count: number }[];
+      }>(`/api/admin/employees/${profileId}`),
+  });
+}
+
+export type UserProfile = {
+  id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  employee_code: string | null;
+  department_id: string | null;
+  department_name?: string | null;
+  department_code?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export function useProfile() {
+  return useQuery({
+    queryKey: ["profile"],
+    queryFn: () => apiGet<{ profile: UserProfile | null; roles: string[] }>("/api/profile"),
+  });
+}
+
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { full_name?: string; department_id?: string | null; phone?: string }) =>
+      apiPatch<UserProfile>("/api/profile", input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["profile"] }),
+  });
+}
+
+export function useLookupsQuery() {
+  return useQuery({
+    queryKey: ["lookups"],
+    queryFn: () => apiGet<LookupsPayload>("/api/lookups"),
+    staleTime: 60_000,
+  });
+}
+
+export function useSaveLookupGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      groupKey: string;
+      values: Array<Pick<LookupValue, "value_key" | "label" | "tone" | "sort_order" | "is_active">>;
+    }) => apiPut(`/api/admin/lookups/${input.groupKey}`, { values: input.values }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["lookups"] }),
+  });
+}
+
+export function useDeleteLookupValue() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { groupKey: string; valueKey: string }) =>
+      apiDelete(`/api/admin/lookups/${input.groupKey}/${input.valueKey}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["lookups"] }),
+  });
+}
+
+export function useCreateDepartment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; code: string }) => apiPost("/api/admin/departments", input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["departments"] }),
+  });
+}
+
+export function useUpdateDepartment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; name?: string; code?: string }) =>
+      apiPatch(`/api/admin/departments/${input.id}`, { name: input.name, code: input.code }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["departments"] }),
+  });
+}
+
+export function useDeleteDepartment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiDelete(`/api/admin/departments/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["departments"] }),
+  });
+}
+
+export function useCreateLocation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      name: string;
+      address?: string;
+      latitude?: number | null;
+      longitude?: number | null;
+      location_type?: string;
+    }) => apiPost("/api/admin/locations", input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["locations"] }),
+  });
+}
+
+export function useUpdateLocation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; patch: Record<string, unknown> }) =>
+      apiPatch(`/api/admin/locations/${input.id}`, input.patch),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["locations"] }),
+  });
+}
+
+export function useDeleteLocation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiDelete(`/api/admin/locations/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["locations"] }),
   });
 }

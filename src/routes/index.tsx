@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { WorkspaceSkeleton } from "@/components/loading-skeletons";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({
@@ -30,9 +31,6 @@ function Index() {
     void navigate({ to: session ? "/dashboard" : "/auth" });
   }, [session, loading, navigate]);
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
-      Loading FleetOps…
-    </div>
-  );
+  if (loading) return <WorkspaceSkeleton />;
+  return null;
 }

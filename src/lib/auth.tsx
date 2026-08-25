@@ -1,83 +1,76 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { apiGet, apiPost } from "@/lib/api-client";
 import type { AppRole } from "./fleet";
 
+export type AuthUser = {
+  id: string;
+  phone: string | null;
+  full_name: string;
+  email: string | null;
+  roles: AppRole[];
+  driverId: string | null;
+};
+
 interface AuthState {
-  session: Session | null;
-  user: User | null;
+  user: { id: string } | null;
+  session: { user: { id: string } } | null;
   roles: AppRole[];
   profile: { full_name: string; email: string | null; phone: string | null } | null;
   driverId: string | null;
   loading: boolean;
   isDispatcher: boolean;
   isDriver: boolean;
+  isAdmin: boolean;
+  isEmployee: boolean;
   signOut: () => Promise<void>;
+  refresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [roles, setRoles] = useState<AppRole[]>([]);
-  const [profile, setProfile] = useState<AuthState["profile"]>(null);
-  const [driverId, setDriverId] = useState<string | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
-      setSession(next);
-      if (!next) {
-        setRoles([]);
-        setProfile(null);
-        setDriverId(null);
-      }
-    });
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-    return () => sub.subscription.unsubscribe();
+  const refresh = useCallback(async () => {
+    try {
+      const { user: next } = await apiGet<{ user: AuthUser | null }>("/api/auth/me");
+      setUser(next);
+    } catch {
+      setUser(null);
+    }
   }, []);
 
   useEffect(() => {
-    const uid = session?.user.id;
-    if (!uid) return;
-    let cancelled = false;
-    void (async () => {
-      const [rolesRes, profileRes, driverRes] = await Promise.all([
-        supabase.from("user_roles").select("role").eq("user_id", uid),
-        supabase.from("profiles").select("full_name, email, phone").eq("id", uid).maybeSingle(),
-        supabase.from("drivers").select("id").eq("user_id", uid).maybeSingle(),
-      ]);
-      if (cancelled) return;
-      setRoles((rolesRes.data ?? []).map((r) => r.role as AppRole));
-      setProfile(profileRes.data ?? null);
-      setDriverId(driverRes.data?.id ?? null);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [session?.user.id]);
+    void refresh().finally(() => setLoading(false));
+  }, [refresh]);
 
-  const value = useMemo<AuthState>(
-    () => ({
-      session,
-      user: session?.user ?? null,
+  const value = useMemo<AuthState>(() => {
+    const roles = user?.roles ?? [];
+    const profile = user
+      ? { full_name: user.full_name, email: user.email, phone: user.phone }
+      : null;
+    const clientUser = user ? { id: user.id } : null;
+    return {
+      user: clientUser,
+      session: clientUser ? { user: clientUser } : null,
       roles,
       profile,
-      driverId,
+      driverId: user?.driverId ?? null,
       loading,
-      isDispatcher: roles.some((r) =>
-        ["transport_admin", "fleet_manager", "system_admin"].includes(r),
-      ),
+      isDispatcher: roles.some((r) => ["transport_admin", "fleet_manager", "system_admin"].includes(r)),
+      isAdmin: roles.some((r) => ["transport_admin", "system_admin"].includes(r)),
       isDriver: roles.includes("driver"),
+      isEmployee:
+        roles.includes("employee") &&
+        !roles.some((r) => ["transport_admin", "system_admin", "driver"].includes(r)),
       signOut: async () => {
-        await supabase.auth.signOut();
+        await apiPost("/api/auth/logout");
+        setUser(null);
       },
-    }),
-    [session, roles, profile, driverId, loading],
-  );
+      refresh,
+    };
+  }, [user, loading, refresh]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

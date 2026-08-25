@@ -1,6 +1,24 @@
 export type AppRole = "employee" | "transport_admin" | "fleet_manager" | "driver" | "system_admin";
 
-export type Tone = "success" | "warning" | "danger" | "info" | "neutral" | "primary";
+export type Tone =
+  | "success"
+  | "warning"
+  | "danger"
+  | "info"
+  | "neutral"
+  | "primary"
+  | "violet"
+  | "coral"
+  | "rose"
+  | "sky";
+
+export type RosterRole = "admin_hr" | "driver" | "employee";
+
+export const ROSTER_ROLE: Record<RosterRole, { label: string; tone: Tone }> = {
+  admin_hr: { label: "Admin / HR", tone: "primary" },
+  driver: { label: "Driver", tone: "info" },
+  employee: { label: "Employee", tone: "neutral" },
+};
 
 export const REQUEST_STATUS: Record<string, { label: string; tone: Tone }> = {
   draft: { label: "Draft", tone: "neutral" },
@@ -62,9 +80,70 @@ export const PRIORITY: Record<string, { label: string; tone: Tone }> = {
   vip: { label: "VIP", tone: "primary" },
 };
 
+export const TRIP_TYPE: Record<string, { label: string; tone: Tone }> = {
+  one_time: { label: "One-time", tone: "info" },
+  round_trip: { label: "Round trip", tone: "primary" },
+};
+
+export const SHIFT: Record<string, { label: string; tone: Tone }> = {
+  day: { label: "Day", tone: "warning" },
+  evening: { label: "Evening", tone: "primary" },
+  night: { label: "Night", tone: "info" },
+  flexible: { label: "Flexible", tone: "neutral" },
+};
+
+export const SEVERITY: Record<string, { label: string; tone: Tone }> = {
+  low: { label: "Low", tone: "neutral" },
+  medium: { label: "Medium", tone: "warning" },
+  high: { label: "High", tone: "danger" },
+  critical: { label: "Critical", tone: "danger" },
+};
+
+export const APP_ROLE_CHIP: Record<AppRole, { label: string; tone: Tone }> = {
+  employee: { label: "Employee", tone: "info" },
+  transport_admin: { label: "Transport admin", tone: "primary" },
+  fleet_manager: { label: "Fleet manager", tone: "primary" },
+  driver: { label: "Driver", tone: "success" },
+  system_admin: { label: "System admin", tone: "warning" },
+};
+
+export const UNAVAILABILITY_STATUS: Record<string, { label: string; tone: Tone }> = {
+  pending: { label: "Pending review", tone: "warning" },
+  approved_unavailable: { label: "Unavailable", tone: "danger" },
+  sent_to_maintenance: { label: "In maintenance", tone: "info" },
+  rejected: { label: "Rejected", tone: "neutral" },
+  info_requested: { label: "Info requested", tone: "warning" },
+  resolved: { label: "Resolved", tone: "success" },
+};
+
+const CATEGORY_TONE: Record<string, Tone> = {
+  sedan: "info",
+  car: "info",
+  suv: "primary",
+  mpv: "primary",
+  microbus: "warning",
+  minibus: "warning",
+  bus: "warning",
+  pickup: "neutral",
+  ambulance: "danger",
+  truck: "neutral",
+};
+
+export function categoryTone(category: string | null | undefined): Tone {
+  if (!category) return "neutral";
+  return CATEGORY_TONE[category] ?? "neutral";
+}
+
+export function categoryChipLabel(category: string | null | undefined) {
+  if (!category) return "Any category";
+  return VEHICLE_CATEGORY_LABELS[category as VehicleCategory] ?? category;
+}
+
 export const VEHICLE_CATEGORIES = [
   "sedan",
+  "car",
   "suv",
+  "mpv",
   "microbus",
   "minibus",
   "bus",
@@ -73,42 +152,139 @@ export const VEHICLE_CATEGORIES = [
   "truck",
 ] as const;
 
+export type VehicleCategory = (typeof VEHICLE_CATEGORIES)[number];
+
+export const VEHICLE_CATEGORY_LABELS: Record<VehicleCategory, string> = {
+  sedan: "Sedan",
+  car: "Car",
+  suv: "SUV",
+  mpv: "MPV",
+  microbus: "Microbus",
+  minibus: "Minibus",
+  bus: "Bus",
+  pickup: "Pickup",
+  ambulance: "Ambulance",
+  truck: "Truck",
+};
+
+/** Typical passenger capacity for category suggestions (fits N or fewer). */
+export const VEHICLE_CATEGORY_CAPACITY: Record<string, number> = {
+  sedan: 4,
+  car: 4,
+  pickup: 4,
+  ambulance: 4,
+  truck: 3,
+  suv: 6,
+  mpv: 7,
+  microbus: 12,
+  minibus: 25,
+  bus: 40,
+};
+
+const SUGGEST_ORDER = ["sedan", "car", "suv", "mpv", "microbus", "minibus", "bus"] as const;
+
+/** Smallest passenger-fit category from available lookup keys. */
+export function suggestCategoryForPassengers(passengerCount: number, availableKeys: string[]): string {
+  const n = Math.max(1, Math.floor(passengerCount) || 1);
+  const keys = new Set(availableKeys);
+  for (const key of SUGGEST_ORDER) {
+    if (!keys.has(key)) continue;
+    if ((VEHICLE_CATEGORY_CAPACITY[key] ?? 0) >= n) return key;
+  }
+  // Prefer largest capacity among remaining keys
+  let best = availableKeys[0] ?? "sedan";
+  let bestCap = VEHICLE_CATEGORY_CAPACITY[best] ?? 0;
+  for (const key of availableKeys) {
+    const cap = VEHICLE_CATEGORY_CAPACITY[key] ?? 0;
+    if (cap > bestCap) {
+      best = key;
+      bestCap = cap;
+    }
+  }
+  return best;
+}
+
+export function categoryFitsPassengers(category: string, passengerCount: number): boolean {
+  const cap = VEHICLE_CATEGORY_CAPACITY[category];
+  if (cap == null) return true;
+  return cap >= Math.max(1, passengerCount);
+}
+
+export const FUEL_TYPE_LABELS: Record<string, string> = {
+  petrol: "Petrol",
+  diesel: "Diesel",
+  cng: "CNG",
+  hybrid: "Hybrid",
+  electric: "Electric",
+};
+
+/** Days until a date; negative = overdue. */
+export function daysUntil(value?: string | null) {
+  if (!value) return null;
+  return Math.ceil((new Date(value).getTime() - Date.now()) / 86400000);
+}
+
+export function complianceTone(days: number | null): Tone {
+  if (days === null) return "neutral";
+  if (days < 0) return "danger";
+  if (days < 45) return "warning";
+  return "success";
+}
+
+export function complianceLabel(days: number | null, label: string) {
+  if (days === null) return `${label}: not set`;
+  if (days < 0) return `${label}: expired ${Math.abs(days)}d ago`;
+  if (days === 0) return `${label}: expires today`;
+  return `${label}: ${days}d left`;
+}
+
+export function kmUntilService(odometer: number, lastServiceKm: number, intervalKm: number) {
+  const nextAt = lastServiceKm + intervalKm;
+  return nextAt - odometer;
+}
+
+export function serviceTone(kmRemaining: number): Tone {
+  if (kmRemaining < 0) return "danger";
+  if (kmRemaining < 1000) return "warning";
+  return "success";
+}
+
 /** Driver action buttons derived from the server-side trip state machine. */
 export function nextDriverActions(
   status: string,
   hasStops: boolean,
   isRoundTrip: boolean,
-): { action: string; label: string; primary?: boolean }[] {
+): { action: string; label: string; primary?: boolean; hint?: string }[] {
   switch (status) {
     case "driver_assigned":
-      return [{ action: "confirm", label: "Confirm assignment", primary: true }];
+      return [{ action: "confirm", label: "Confirm assignment", primary: true, hint: "Accept this trip and notify dispatch you're ready" }];
     case "driver_confirmed":
-      return [{ action: "head_to_pickup", label: "Start heading to pickup", primary: true }];
+      return [{ action: "head_to_pickup", label: "Start heading to pickup", primary: true, hint: "Mark that you're driving to the pickup location" }];
     case "heading_to_pickup":
-      return [{ action: "arrive_pickup", label: "I have arrived", primary: true }];
+      return [{ action: "arrive_pickup", label: "I have arrived", primary: true, hint: "Tell dispatch you've reached the pickup point" }];
     case "arrived_pickup":
-      return [{ action: "confirm_pickup", label: "Confirm passenger pickup", primary: true }];
+      return [{ action: "confirm_pickup", label: "Confirm passenger pickup", primary: true, hint: "Passengers are onboard — start the journey" }];
     case "passenger_picked_up":
       return hasStops
-        ? [{ action: "depart", label: "Start journey", primary: true }]
-        : [{ action: "reach_destination", label: "Reached destination", primary: true }];
+        ? [{ action: "depart", label: "Start journey", primary: true, hint: "Leave pickup and head toward the next stop" }]
+        : [{ action: "reach_destination", label: "Reached destination", primary: true, hint: "You've arrived at the drop-off location" }];
     case "in_transit":
       return hasStops
         ? [
-            { action: "reach_stop", label: "Confirm stop reached", primary: true },
-            { action: "reach_destination", label: "Reached final destination" },
+            { action: "reach_stop", label: "Confirm stop reached", primary: true, hint: "Mark this intermediate stop as complete" },
+            { action: "reach_destination", label: "Reached final destination", hint: "Skip remaining stops and arrive at final drop" },
           ]
-        : [{ action: "reach_destination", label: "Reached destination", primary: true }];
+        : [{ action: "reach_destination", label: "Reached destination", primary: true, hint: "You've arrived at the drop-off location" }];
     case "stop_reached":
-      return [{ action: "depart", label: "Continue to next point", primary: true }];
+      return [{ action: "depart", label: "Continue to next point", primary: true, hint: "Resume driving toward the next route point" }];
     case "destination_reached":
-      return [{ action: "confirm_drop", label: "Confirm passenger drop", primary: true }];
+      return [{ action: "confirm_drop", label: "Confirm passenger drop", primary: true, hint: "Passengers have exited the vehicle" }];
     case "passenger_dropped":
-      return [{ action: "complete", label: "Complete trip", primary: true }];
+      return [{ action: "complete", label: "Complete trip", primary: true, hint: "Close this trip and return vehicle to available pool" }];
     case "return_pending":
-      return [{ action: "start_return", label: "Start return journey", primary: true }];
+      return [{ action: "start_return", label: "Start return journey", primary: true, hint: "Begin the return leg of a round trip" }];
     case "return_in_transit":
-      return [{ action: "complete", label: "Complete trip", primary: true }];
+      return [{ action: "complete", label: "Complete trip", primary: true, hint: "Finish the return journey and close the trip" }];
     default:
       return isRoundTrip ? [] : [];
   }

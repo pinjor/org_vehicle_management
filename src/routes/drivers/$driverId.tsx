@@ -1,0 +1,494 @@
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { ArrowLeft, User } from "lucide-react";
+import { AppShell } from "@/components/app-shell";
+import { DetailPageSkeleton } from "@/components/loading-skeletons";
+import { LookupChip } from "@/components/lookup-chip";
+import {
+  AppPhoneField,
+  DataRow,
+  EntityProfileLink,
+  Field,
+  KpiCard,
+  KpiGrid,
+  List,
+  ListLink,
+  ListRow,
+  Panel,
+  StatusChip,
+} from "@/components/fleet-ui";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/lib/auth";
+import { useLookupOptions } from "@/lib/lookups-context";
+import {
+  categoryChipLabel,
+  complianceLabel,
+  complianceTone,
+  daysUntil,
+  formatDate,
+  formatDateTime,
+  SHIFT,
+  TRIP_STATUS,
+} from "@/lib/fleet";
+import { useDriver, useDriverTrips, useUpdateDriver } from "@/lib/queries";
+import { formatBdPhone, isValidBdPhone, maskBdPhoneInput, normalizeBdPhone } from "@/lib/phone";
+
+export const Route = createFileRoute("/drivers/$driverId")({
+  head: ({ params }) => ({
+    meta: [{ title: `Driver profile — FleetOps` }, { name: "description", content: `Driver record ${params.driverId}.` }],
+  }),
+  component: DriverProfilePage,
+});
+
+function driverInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0] ?? ""}${parts[parts.length - 1]![0] ?? ""}`.toUpperCase();
+}
+
+function DriverProfilePage() {
+  const { driverId } = Route.useParams();
+  const { isDispatcher, isDriver, isAdmin } = useAuth();
+  const navigate = useNavigate();
+  const statusOptions = useLookupOptions("driver_status");
+  const categoryOptions = useLookupOptions("vehicle_category");
+  const { data: driver, isLoading } = useDriver(driverId);
+  const { data: trips } = useDriverTrips(driverId);
+  const update = useUpdateDriver();
+  const [form, setForm] = useState<Record<string, string | number | string[]>>({});
+  const [phoneLocal, setPhoneLocal] = useState("");
+  const [altPhoneLocal, setAltPhoneLocal] = useState("");
+
+  const isPureDriver = isDriver && !isDispatcher && !isAdmin;
+
+  // Drivers use /profile — keep admin fleet page unchanged for dispatch/admin.
+  useEffect(() => {
+    if (isPureDriver) {
+      void navigate({ to: "/profile", replace: true });
+    }
+  }, [isPureDriver, navigate]);
+
+  useEffect(() => {
+    if (!driver) return;
+    setForm({
+      full_name: driver.full_name,
+      driver_code: driver.driver_code,
+      email: driver.email ?? "",
+      license_number: driver.license_number,
+      license_type: driver.license_type,
+      license_expiry: driver.license_expiry ?? "",
+      experience_years: driver.experience_years,
+      shift: driver.shift,
+      current_status: driver.current_status,
+      blood_group: driver.blood_group ?? "",
+      emergency_contact: driver.emergency_contact ?? "",
+      address: driver.address ?? "",
+      date_of_joining: driver.date_of_joining ?? "",
+      allowed_categories: driver.allowed_categories ?? [],
+      rating: driver.rating,
+    });
+    setPhoneLocal(driver.phone?.replace(/^\+880/, "").replace(/^0/, "") ?? "");
+    setAltPhoneLocal(driver.alternate_phone?.replace(/^\+880/, "").replace(/^0/, "") ?? "");
+  }, [driver]);
+
+  if (isPureDriver) {
+    return (
+      <AppShell title="Profile" subtitle="Redirecting…">
+        <DetailPageSkeleton />
+      </AppShell>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <AppShell title="Driver profile">
+        <DetailPageSkeleton kpiCount={4} />
+      </AppShell>
+    );
+  }
+
+  if (!driver) {
+    return (
+      <AppShell title="Driver not found">
+        <Link to="/drivers" className="text-sm text-primary hover:underline">
+          Back to roster
+        </Link>
+      </AppShell>
+    );
+  }
+
+  const set = (k: string, v: string | number | string[]) => setForm((f) => ({ ...f, [k]: v }));
+
+  function toggleCategory(cat: string) {
+    const cats = (form.allowed_categories as string[]) ?? [];
+    set("allowed_categories", cats.includes(cat) ? cats.filter((c) => c !== cat) : [...cats, cat]);
+  }
+
+  const licenceDays = daysUntil(String(form.license_expiry || driver.license_expiry));
+  const photoUrl = (driver as { photo_url?: string | null }).photo_url ?? null;
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isDispatcher) return;
+    const phone = normalizeBdPhone(phoneLocal);
+    if (!phone) {
+      toast.error("Enter a valid Bangladesh mobile number");
+      return;
+    }
+    const altPhone = altPhoneLocal ? normalizeBdPhone(altPhoneLocal) : null;
+    if (altPhoneLocal && !altPhone) {
+      toast.error("Alternate phone is not a valid BD mobile");
+      return;
+    }
+    try {
+      await update.mutateAsync({
+        id: driverId,
+        patch: {
+          full_name: String(form.full_name),
+          driver_code: String(form.driver_code),
+          email: String(form.email) || null,
+          phone,
+          alternate_phone: altPhone,
+          license_number: String(form.license_number),
+          license_type: String(form.license_type),
+          license_expiry: String(form.license_expiry) || null,
+          experience_years: Number(form.experience_years),
+          shift: String(form.shift),
+          current_status: String(form.current_status),
+          blood_group: String(form.blood_group) || null,
+          emergency_contact: String(form.emergency_contact) || null,
+          address: String(form.address) || null,
+          date_of_joining: String(form.date_of_joining) || null,
+          allowed_categories: form.allowed_categories as string[],
+          rating: Number(form.rating),
+        },
+      });
+      toast.success("Driver profile saved");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Save failed");
+    }
+  }
+
+  return (
+    <AppShell
+      title={driver.full_name}
+      subtitle={`${driver.driver_code} · ${formatBdPhone(driver.phone)}`}
+      actions={<LookupChip group="driver_status" value={driver.current_status} />}
+    >
+      <Link
+        to="/drivers"
+        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" /> Driver roster
+      </Link>
+
+      {!isDispatcher && (
+        <p className="mb-3 rounded-lg border border-border bg-surface-2/60 px-3 py-2 text-sm text-muted-foreground">
+          View only. Contact dispatch to update this driver record.
+        </p>
+      )}
+
+      <div className="profile-page profile-page--compact page-stack">
+        <div className="profile-hero">
+          <div className="profile-photo" aria-label="Driver photo">
+            {photoUrl ? (
+              <img src={photoUrl} alt={driver.full_name} />
+            ) : (
+              <>
+                <span className="profile-photo__initials">{driverInitials(driver.full_name)}</span>
+                <User className="size-5 opacity-40" aria-hidden />
+                <span className="profile-photo__hint">Photo</span>
+              </>
+            )}
+          </div>
+
+          <div className="profile-hero__meta">
+            <KpiGrid fit="auto">
+              <KpiCard
+                label="Licence validity"
+                value={formatDate(driver.license_expiry)}
+                hint={complianceLabel(licenceDays, "Licence")}
+                tone={complianceTone(licenceDays)}
+              />
+              <KpiCard label="Experience" value={`${driver.experience_years} yr`} hint={driver.license_type} tone="info" />
+              <KpiCard label="Rating" value={`★ ${driver.rating}`} hint={`${driver.shift} shift`} tone="primary" />
+              <KpiCard
+                label="Vehicle types"
+                value={(driver.allowed_categories ?? []).map((c) => categoryChipLabel(c)).join(", ") || "—"}
+                tone="neutral"
+              />
+            </KpiGrid>
+
+            <Panel compact bodyClassName="profile-overview-body">
+              <DataRow label="Driver code" value={driver.driver_code} />
+              <DataRow label="Mobile" value={formatBdPhone(driver.phone)} />
+              <DataRow label="Email" value={driver.email ?? "—"} />
+              <DataRow
+                label="Duty status"
+                value={<LookupChip group="driver_status" value={driver.current_status} dot={false} />}
+              />
+            </Panel>
+          </div>
+        </div>
+
+        <form onSubmit={save} className="profile-page__form profile-page__form--split">
+          <Panel title="Personal" compact bodyClassName="profile-panel-body">
+            <div className="profile-form-fields">
+              <Field label="Full name">
+                <input
+                  className="app-field-input"
+                  value={String(form.full_name ?? "")}
+                  onChange={(e) => set("full_name", e.target.value)}
+                  disabled={!isDispatcher}
+                />
+              </Field>
+              <Field label="Driver code">
+                <input
+                  className="app-field-input"
+                  value={String(form.driver_code ?? "")}
+                  onChange={(e) => set("driver_code", e.target.value)}
+                  disabled={!isDispatcher}
+                />
+              </Field>
+              <Field label="Mobile">
+                <AppPhoneField
+                  value={phoneLocal}
+                  onChange={(v) => setPhoneLocal(maskBdPhoneInput(v))}
+                  disabled={!isDispatcher}
+                />
+                {phoneLocal && !isValidBdPhone(phoneLocal) && (
+                  <p className="mt-1 text-xs text-destructive">Invalid mobile</p>
+                )}
+              </Field>
+              <Field label="Alternate mobile">
+                <AppPhoneField
+                  value={altPhoneLocal}
+                  onChange={(v) => setAltPhoneLocal(maskBdPhoneInput(v))}
+                  disabled={!isDispatcher}
+                />
+              </Field>
+              <Field label="Email">
+                <input
+                  type="email"
+                  className="app-field-input"
+                  value={String(form.email ?? "")}
+                  onChange={(e) => set("email", e.target.value)}
+                  disabled={!isDispatcher}
+                />
+              </Field>
+              <Field label="Joined">
+                <input
+                  type="date"
+                  className="app-field-input"
+                  value={String(form.date_of_joining ?? "")}
+                  onChange={(e) => set("date_of_joining", e.target.value)}
+                  disabled={!isDispatcher}
+                />
+              </Field>
+              <Field label="Blood group">
+                <input
+                  className="app-field-input"
+                  value={String(form.blood_group ?? "")}
+                  onChange={(e) => set("blood_group", e.target.value)}
+                  disabled={!isDispatcher}
+                />
+              </Field>
+              <Field label="Emergency contact">
+                <input
+                  className="app-field-input"
+                  value={String(form.emergency_contact ?? "")}
+                  onChange={(e) => set("emergency_contact", e.target.value)}
+                  disabled={!isDispatcher}
+                />
+              </Field>
+              <Field label="Address" className="profile-field-span">
+                <Textarea
+                  value={String(form.address ?? "")}
+                  onChange={(e) => set("address", e.target.value)}
+                  rows={2}
+                  disabled={!isDispatcher}
+                />
+              </Field>
+            </div>
+          </Panel>
+
+          <Panel title="Licence & duty" compact bodyClassName="profile-panel-body">
+            <div className="profile-form-fields">
+              <Field label="Licence number">
+                <input
+                  className="app-field-input"
+                  value={String(form.license_number ?? "")}
+                  onChange={(e) => set("license_number", e.target.value)}
+                  disabled={!isDispatcher}
+                />
+              </Field>
+              <Field label="Licence type">
+                <input
+                  className="app-field-input"
+                  value={String(form.license_type ?? "")}
+                  onChange={(e) => set("license_type", e.target.value)}
+                  disabled={!isDispatcher}
+                />
+              </Field>
+              <Field label="Licence expiry">
+                <input
+                  type="date"
+                  className="app-field-input"
+                  value={String(form.license_expiry ?? "")}
+                  onChange={(e) => set("license_expiry", e.target.value)}
+                  disabled={!isDispatcher}
+                />
+              </Field>
+              <Field label="Experience (yr)">
+                <input
+                  type="number"
+                  className="app-field-input"
+                  value={String(form.experience_years ?? "")}
+                  onChange={(e) => set("experience_years", e.target.value)}
+                  disabled={!isDispatcher}
+                />
+              </Field>
+              <Field label="Rating">
+                <input
+                  type="number"
+                  step="0.1"
+                  min={0}
+                  max={5}
+                  className="app-field-input"
+                  value={String(form.rating ?? "")}
+                  onChange={(e) => set("rating", e.target.value)}
+                  disabled={!isDispatcher}
+                />
+              </Field>
+              <Field label="Shift">
+                <select
+                  className="app-field-select"
+                  value={String(form.shift ?? "")}
+                  onChange={(e) => set("shift", e.target.value)}
+                  disabled={!isDispatcher}
+                >
+                  {Object.entries(SHIFT).map(([value, meta]) => (
+                    <option key={value} value={value}>
+                      {meta.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Duty status" className="profile-field-span">
+                <select
+                  className="app-field-select"
+                  value={String(form.current_status ?? "")}
+                  onChange={(e) => set("current_status", e.target.value)}
+                  disabled={!isDispatcher}
+                >
+                  {statusOptions.map((s) => (
+                    <option key={s.value_key} value={s.value_key}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          </Panel>
+
+          <Panel
+            title="Vehicle types"
+            description="Allowed categories"
+            className="profile-form-span"
+            compact
+            bodyClassName="profile-panel-body"
+          >
+            <div className="flex flex-wrap gap-1.5">
+              {categoryOptions.map((cat) => {
+                const active = ((form.allowed_categories as string[]) ?? []).includes(cat.value_key);
+                return (
+                  <button
+                    key={cat.value_key}
+                    type="button"
+                    disabled={!isDispatcher}
+                    onClick={() => toggleCategory(cat.value_key)}
+                    className={
+                      "rounded-md border px-2.5 py-1 text-xs transition-colors " +
+                      (active
+                        ? "border-primary bg-primary/8 font-medium text-primary"
+                        : "border-border text-muted-foreground")
+                    }
+                  >
+                    {cat.label}
+                  </button>
+                );
+              })}
+            </div>
+          </Panel>
+
+          {isDispatcher && (
+            <div className="profile-form-span">
+              <Button
+                type="submit"
+                className="min-h-9 w-full sm:w-auto"
+                disabled={update.isPending}
+                tooltip="Save changes to this driver's profile"
+              >
+                {update.isPending ? "Saving…" : "Save driver profile"}
+              </Button>
+            </div>
+          )}
+        </form>
+
+        <Panel title="Trip history" description="Recent assignments" compact bodyClassName="p-0">
+          {(trips ?? []).length === 0 ? (
+            <p className="p-4 text-sm text-muted-foreground">No trips recorded for this driver yet.</p>
+          ) : (
+            <List>
+              {(trips ?? []).slice(0, 12).map((t) => {
+                const requestId = t.request_id ?? t.vehicle_requests?.id;
+                const row = (
+                  <>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{t.reference}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {t.vehicle_requests?.purpose ?? "Trip"} ·{" "}
+                        {formatDateTime(t.vehicle_requests?.pickup_at ?? t.created_at)}
+                      </p>
+                      {t.vehicle_id && t.vehicles?.name && (
+                        <div className="mt-1">
+                          <EntityProfileLink
+                            to="/fleet/$vehicleId"
+                            params={{ vehicleId: t.vehicle_id }}
+                            label={t.vehicles.name}
+                            hint={t.vehicles.registration_number}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <StatusChip
+                      label={TRIP_STATUS[t.status]?.label ?? t.status}
+                      tone={TRIP_STATUS[t.status]?.tone ?? "neutral"}
+                    />
+                  </>
+                );
+
+                return (
+                  <ListRow key={t.id}>
+                    {requestId ? (
+                      <ListLink to="/requests/$requestId" params={{ requestId }}>
+                        {row}
+                      </ListLink>
+                    ) : (
+                      <div className="flex flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                        {row}
+                      </div>
+                    )}
+                  </ListRow>
+                );
+              })}
+            </List>
+          )}
+        </Panel>
+      </div>
+    </AppShell>
+  );
+}

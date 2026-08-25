@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" fill="none">
+  <rect width="1200" height="630" fill="#F4F6F8"/>
+  <rect x="80" y="80" width="1040" height="470" rx="24" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+  <g transform="translate(520 195)">
+    <rect width="160" height="160" rx="36" fill="#1A2332"/>
+    <path d="M37.5 122.5Q72.5 62.5 107.5 62.5" stroke="#9B7FE8" stroke-width="7.5" stroke-linecap="round" stroke-dasharray="11.25 11.25" opacity="0.75"/>
+    <path fill="#FF5C9A" d="M108.75 38.75c-5.75 0-10.5 4.75-10.5 10.5 0 7.75 10.5 19.25 10.5 19.25s10.5-11.5 10.5-19.25c0-5.75-4.75-10.5-10.5-10.5zm0 13a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/>
+    <path fill="#FF9A5C" d="M23.75 116.25h112.5l-6.5-19.5a11.75 11.75 0 0 0-11.25-8H41.5a11.75 11.75 0 0 0-11.25 8l-6.5 19.5z"/>
+    <path fill="#FFB978" d="M46.25 92.5l11.75-16.75h44l11.75 16.75H46.25z"/>
+    <path fill="#F8FFFD" opacity="0.92" d="M59.25 92.5h41.5l-7.25-10.25h-27l-7.25 10.25z"/>
+    <circle cx="48.75" cy="116.25" r="11.75" fill="#302349"/>
+    <circle cx="48.75" cy="116.25" r="7.25" fill="#BBABED"/>
+    <circle cx="111.25" cy="116.25" r="11.75" fill="#302349"/>
+    <circle cx="111.25" cy="116.25" r="7.25" fill="#BBABED"/>
+    <rect x="23.75" y="107.75" width="112.5" height="5.5" rx="1.75" fill="#FC7E3F"/>
+  </g>
+  <text x="600" y="430" text-anchor="middle" font-family="system-ui, sans-serif" font-size="48" font-weight="600" fill="#1A2332">FleetOps</text>
+  <text x="600" y="485" text-anchor="middle" font-family="system-ui, sans-serif" font-size="24" fill="#64748B">Vehicle request &amp; dispatch</text>
+</svg>

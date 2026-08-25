@@ -13,13 +13,25 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DispatchRouteImport } from './routes/dispatch'
-import { Route as DriversRouteImport } from './routes/drivers'
-import { Route as FleetRouteImport } from './routes/fleet'
+import { Route as DriversRouteRouteImport } from './routes/drivers/route'
+import { Route as FleetRouteRouteImport } from './routes/fleet/route'
 import { Route as MaintenanceRouteImport } from './routes/maintenance'
-import { Route as MyTripsRouteImport } from './routes/my-trips'
+import { Route as MyTripsRouteRouteImport } from './routes/my-trips/route'
+import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as TripsRouteImport } from './routes/trips'
+import { Route as AdminEmployeesRouteImport } from './routes/admin/employees'
+import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
+import { Route as AdminUsersRouteImport } from './routes/admin/users'
+import { Route as DriversIndexRouteImport } from './routes/drivers/index'
+import { Route as DriversDriverIdRouteImport } from './routes/drivers/$driverId'
+import { Route as FleetIndexRouteImport } from './routes/fleet/index'
+import { Route as FleetVehicleIdRouteImport } from './routes/fleet/$vehicleId'
+import { Route as MyTripsIndexRouteImport } from './routes/my-trips/index'
+import { Route as MyTripsTripIdRouteImport } from './routes/my-trips/$tripId'
 import { Route as RequestsIndexRouteImport } from './routes/requests/index'
 import { Route as RequestsRequestIdRouteImport } from './routes/requests/$requestId'
 import { Route as RequestsNewRouteImport } from './routes/requests/new'
+import { Route as AdminEmployeesEmployeeIdRouteImport } from './routes/admin/employees/$employeeId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -41,12 +53,12 @@ const DispatchRoute = DispatchRouteImport.update({
   path: '/dispatch',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DriversRoute = DriversRouteImport.update({
+const DriversRouteRoute = DriversRouteRouteImport.update({
   id: '/drivers',
   path: '/drivers',
   getParentRoute: () => rootRouteImport,
 } as any)
-const FleetRoute = FleetRouteImport.update({
+const FleetRouteRoute = FleetRouteRouteImport.update({
   id: '/fleet',
   path: '/fleet',
   getParentRoute: () => rootRouteImport,
@@ -56,10 +68,65 @@ const MaintenanceRoute = MaintenanceRouteImport.update({
   path: '/maintenance',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MyTripsRoute = MyTripsRouteImport.update({
+const MyTripsRouteRoute = MyTripsRouteRouteImport.update({
   id: '/my-trips',
   path: '/my-trips',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TripsRoute = TripsRouteImport.update({
+  id: '/trips',
+  path: '/trips',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminEmployeesRoute = AdminEmployeesRouteImport.update({
+  id: '/admin/employees',
+  path: '/admin/employees',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/admin/settings',
+  path: '/admin/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/admin/users',
+  path: '/admin/users',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DriversIndexRoute = DriversIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DriversRouteRoute,
+} as any)
+const DriversDriverIdRoute = DriversDriverIdRouteImport.update({
+  id: '/$driverId',
+  path: '/$driverId',
+  getParentRoute: () => DriversRouteRoute,
+} as any)
+const FleetIndexRoute = FleetIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => FleetRouteRoute,
+} as any)
+const FleetVehicleIdRoute = FleetVehicleIdRouteImport.update({
+  id: '/$vehicleId',
+  path: '/$vehicleId',
+  getParentRoute: () => FleetRouteRoute,
+} as any)
+const MyTripsIndexRoute = MyTripsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => MyTripsRouteRoute,
+} as any)
+const MyTripsTripIdRoute = MyTripsTripIdRouteImport.update({
+  id: '/$tripId',
+  path: '/$tripId',
+  getParentRoute: () => MyTripsRouteRoute,
 } as any)
 const RequestsIndexRoute = RequestsIndexRouteImport.update({
   id: '/requests/',
@@ -76,98 +143,175 @@ const RequestsNewRoute = RequestsNewRouteImport.update({
   path: '/requests/new',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminEmployeesEmployeeIdRoute =
+  AdminEmployeesEmployeeIdRouteImport.update({
+    id: '/$employeeId',
+    path: '/$employeeId',
+    getParentRoute: () => AdminEmployeesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/drivers': typeof DriversRouteRouteWithChildren
+  '/fleet': typeof FleetRouteRouteWithChildren
+  '/my-trips': typeof MyTripsRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/dashboard': typeof DashboardRoute
   '/dispatch': typeof DispatchRoute
-  '/drivers': typeof DriversRoute
-  '/fleet': typeof FleetRoute
   '/maintenance': typeof MaintenanceRoute
-  '/my-trips': typeof MyTripsRoute
+  '/profile': typeof ProfileRoute
+  '/trips': typeof TripsRoute
+  '/admin/employees': typeof AdminEmployeesRouteWithChildren
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/drivers/$driverId': typeof DriversDriverIdRoute
+  '/fleet/$vehicleId': typeof FleetVehicleIdRoute
+  '/my-trips/$tripId': typeof MyTripsTripIdRoute
   '/requests/$requestId': typeof RequestsRequestIdRoute
   '/requests/new': typeof RequestsNewRoute
+  '/drivers/': typeof DriversIndexRoute
+  '/fleet/': typeof FleetIndexRoute
+  '/my-trips/': typeof MyTripsIndexRoute
   '/requests/': typeof RequestsIndexRoute
+  '/admin/employees/$employeeId': typeof AdminEmployeesEmployeeIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof DashboardRoute
   '/dispatch': typeof DispatchRoute
-  '/drivers': typeof DriversRoute
-  '/fleet': typeof FleetRoute
   '/maintenance': typeof MaintenanceRoute
-  '/my-trips': typeof MyTripsRoute
+  '/profile': typeof ProfileRoute
+  '/trips': typeof TripsRoute
+  '/admin/employees': typeof AdminEmployeesRouteWithChildren
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/drivers/$driverId': typeof DriversDriverIdRoute
+  '/fleet/$vehicleId': typeof FleetVehicleIdRoute
+  '/my-trips/$tripId': typeof MyTripsTripIdRoute
   '/requests/$requestId': typeof RequestsRequestIdRoute
   '/requests/new': typeof RequestsNewRoute
+  '/drivers': typeof DriversIndexRoute
+  '/fleet': typeof FleetIndexRoute
+  '/my-trips': typeof MyTripsIndexRoute
   '/requests': typeof RequestsIndexRoute
+  '/admin/employees/$employeeId': typeof AdminEmployeesEmployeeIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/drivers': typeof DriversRouteRouteWithChildren
+  '/fleet': typeof FleetRouteRouteWithChildren
+  '/my-trips': typeof MyTripsRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/dashboard': typeof DashboardRoute
   '/dispatch': typeof DispatchRoute
-  '/drivers': typeof DriversRoute
-  '/fleet': typeof FleetRoute
   '/maintenance': typeof MaintenanceRoute
-  '/my-trips': typeof MyTripsRoute
+  '/profile': typeof ProfileRoute
+  '/trips': typeof TripsRoute
+  '/admin/employees': typeof AdminEmployeesRouteWithChildren
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/drivers/$driverId': typeof DriversDriverIdRoute
+  '/fleet/$vehicleId': typeof FleetVehicleIdRoute
+  '/my-trips/$tripId': typeof MyTripsTripIdRoute
   '/requests/$requestId': typeof RequestsRequestIdRoute
   '/requests/new': typeof RequestsNewRoute
+  '/drivers/': typeof DriversIndexRoute
+  '/fleet/': typeof FleetIndexRoute
+  '/my-trips/': typeof MyTripsIndexRoute
   '/requests/': typeof RequestsIndexRoute
+  '/admin/employees/$employeeId': typeof AdminEmployeesEmployeeIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/drivers'
+    | '/fleet'
+    | '/my-trips'
     | '/auth'
     | '/dashboard'
     | '/dispatch'
-    | '/drivers'
-    | '/fleet'
     | '/maintenance'
-    | '/my-trips'
+    | '/profile'
+    | '/trips'
+    | '/admin/employees'
+    | '/admin/settings'
+    | '/admin/users'
+    | '/drivers/$driverId'
+    | '/fleet/$vehicleId'
+    | '/my-trips/$tripId'
     | '/requests/$requestId'
     | '/requests/new'
+    | '/drivers/'
+    | '/fleet/'
+    | '/my-trips/'
     | '/requests/'
+    | '/admin/employees/$employeeId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
     | '/dashboard'
     | '/dispatch'
-    | '/drivers'
-    | '/fleet'
     | '/maintenance'
-    | '/my-trips'
+    | '/profile'
+    | '/trips'
+    | '/admin/employees'
+    | '/admin/settings'
+    | '/admin/users'
+    | '/drivers/$driverId'
+    | '/fleet/$vehicleId'
+    | '/my-trips/$tripId'
     | '/requests/$requestId'
     | '/requests/new'
+    | '/drivers'
+    | '/fleet'
+    | '/my-trips'
     | '/requests'
+    | '/admin/employees/$employeeId'
   id:
     | '__root__'
     | '/'
+    | '/drivers'
+    | '/fleet'
+    | '/my-trips'
     | '/auth'
     | '/dashboard'
     | '/dispatch'
-    | '/drivers'
-    | '/fleet'
     | '/maintenance'
-    | '/my-trips'
+    | '/profile'
+    | '/trips'
+    | '/admin/employees'
+    | '/admin/settings'
+    | '/admin/users'
+    | '/drivers/$driverId'
+    | '/fleet/$vehicleId'
+    | '/my-trips/$tripId'
     | '/requests/$requestId'
     | '/requests/new'
+    | '/drivers/'
+    | '/fleet/'
+    | '/my-trips/'
     | '/requests/'
+    | '/admin/employees/$employeeId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DriversRouteRoute: typeof DriversRouteRouteWithChildren
+  FleetRouteRoute: typeof FleetRouteRouteWithChildren
+  MyTripsRouteRoute: typeof MyTripsRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   DashboardRoute: typeof DashboardRoute
   DispatchRoute: typeof DispatchRoute
-  DriversRoute: typeof DriversRoute
-  FleetRoute: typeof FleetRoute
   MaintenanceRoute: typeof MaintenanceRoute
-  MyTripsRoute: typeof MyTripsRoute
+  ProfileRoute: typeof ProfileRoute
+  TripsRoute: typeof TripsRoute
+  AdminEmployeesRoute: typeof AdminEmployeesRouteWithChildren
+  AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminUsersRoute: typeof AdminUsersRoute
   RequestsRequestIdRoute: typeof RequestsRequestIdRoute
   RequestsNewRoute: typeof RequestsNewRoute
   RequestsIndexRoute: typeof RequestsIndexRoute
@@ -207,14 +351,14 @@ declare module '@tanstack/react-router' {
       id: '/drivers'
       path: '/drivers'
       fullPath: '/drivers'
-      preLoaderRoute: typeof DriversRouteImport
+      preLoaderRoute: typeof DriversRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/fleet': {
       id: '/fleet'
       path: '/fleet'
       fullPath: '/fleet'
-      preLoaderRoute: typeof FleetRouteImport
+      preLoaderRoute: typeof FleetRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/maintenance': {
@@ -228,8 +372,85 @@ declare module '@tanstack/react-router' {
       id: '/my-trips'
       path: '/my-trips'
       fullPath: '/my-trips'
-      preLoaderRoute: typeof MyTripsRouteImport
+      preLoaderRoute: typeof MyTripsRouteRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trips': {
+      id: '/trips'
+      path: '/trips'
+      fullPath: '/trips'
+      preLoaderRoute: typeof TripsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/employees': {
+      id: '/admin/employees'
+      path: '/admin/employees'
+      fullPath: '/admin/employees'
+      preLoaderRoute: typeof AdminEmployeesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/admin/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/admin/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/drivers/': {
+      id: '/drivers/'
+      path: '/'
+      fullPath: '/drivers/'
+      preLoaderRoute: typeof DriversIndexRouteImport
+      parentRoute: typeof DriversRouteRoute
+    }
+    '/drivers/$driverId': {
+      id: '/drivers/$driverId'
+      path: '/$driverId'
+      fullPath: '/drivers/$driverId'
+      preLoaderRoute: typeof DriversDriverIdRouteImport
+      parentRoute: typeof DriversRouteRoute
+    }
+    '/fleet/': {
+      id: '/fleet/'
+      path: '/'
+      fullPath: '/fleet/'
+      preLoaderRoute: typeof FleetIndexRouteImport
+      parentRoute: typeof FleetRouteRoute
+    }
+    '/fleet/$vehicleId': {
+      id: '/fleet/$vehicleId'
+      path: '/$vehicleId'
+      fullPath: '/fleet/$vehicleId'
+      preLoaderRoute: typeof FleetVehicleIdRouteImport
+      parentRoute: typeof FleetRouteRoute
+    }
+    '/my-trips/': {
+      id: '/my-trips/'
+      path: '/'
+      fullPath: '/my-trips/'
+      preLoaderRoute: typeof MyTripsIndexRouteImport
+      parentRoute: typeof MyTripsRouteRoute
+    }
+    '/my-trips/$tripId': {
+      id: '/my-trips/$tripId'
+      path: '/$tripId'
+      fullPath: '/my-trips/$tripId'
+      preLoaderRoute: typeof MyTripsTripIdRouteImport
+      parentRoute: typeof MyTripsRouteRoute
     }
     '/requests/': {
       id: '/requests/'
@@ -252,18 +473,84 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RequestsNewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/employees/$employeeId': {
+      id: '/admin/employees/$employeeId'
+      path: '/$employeeId'
+      fullPath: '/admin/employees/$employeeId'
+      preLoaderRoute: typeof AdminEmployeesEmployeeIdRouteImport
+      parentRoute: typeof AdminEmployeesRoute
+    }
   }
 }
 
+interface DriversRouteRouteChildren {
+  DriversDriverIdRoute: typeof DriversDriverIdRoute
+  DriversIndexRoute: typeof DriversIndexRoute
+}
+
+const DriversRouteRouteChildren: DriversRouteRouteChildren = {
+  DriversDriverIdRoute: DriversDriverIdRoute,
+  DriversIndexRoute: DriversIndexRoute,
+}
+
+const DriversRouteRouteWithChildren = DriversRouteRoute._addFileChildren(
+  DriversRouteRouteChildren,
+)
+
+interface FleetRouteRouteChildren {
+  FleetVehicleIdRoute: typeof FleetVehicleIdRoute
+  FleetIndexRoute: typeof FleetIndexRoute
+}
+
+const FleetRouteRouteChildren: FleetRouteRouteChildren = {
+  FleetVehicleIdRoute: FleetVehicleIdRoute,
+  FleetIndexRoute: FleetIndexRoute,
+}
+
+const FleetRouteRouteWithChildren = FleetRouteRoute._addFileChildren(
+  FleetRouteRouteChildren,
+)
+
+interface MyTripsRouteRouteChildren {
+  MyTripsTripIdRoute: typeof MyTripsTripIdRoute
+  MyTripsIndexRoute: typeof MyTripsIndexRoute
+}
+
+const MyTripsRouteRouteChildren: MyTripsRouteRouteChildren = {
+  MyTripsTripIdRoute: MyTripsTripIdRoute,
+  MyTripsIndexRoute: MyTripsIndexRoute,
+}
+
+const MyTripsRouteRouteWithChildren = MyTripsRouteRoute._addFileChildren(
+  MyTripsRouteRouteChildren,
+)
+
+interface AdminEmployeesRouteChildren {
+  AdminEmployeesEmployeeIdRoute: typeof AdminEmployeesEmployeeIdRoute
+}
+
+const AdminEmployeesRouteChildren: AdminEmployeesRouteChildren = {
+  AdminEmployeesEmployeeIdRoute: AdminEmployeesEmployeeIdRoute,
+}
+
+const AdminEmployeesRouteWithChildren = AdminEmployeesRoute._addFileChildren(
+  AdminEmployeesRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DriversRouteRoute: DriversRouteRouteWithChildren,
+  FleetRouteRoute: FleetRouteRouteWithChildren,
+  MyTripsRouteRoute: MyTripsRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   DashboardRoute: DashboardRoute,
   DispatchRoute: DispatchRoute,
-  DriversRoute: DriversRoute,
-  FleetRoute: FleetRoute,
   MaintenanceRoute: MaintenanceRoute,
-  MyTripsRoute: MyTripsRoute,
+  ProfileRoute: ProfileRoute,
+  TripsRoute: TripsRoute,
+  AdminEmployeesRoute: AdminEmployeesRouteWithChildren,
+  AdminSettingsRoute: AdminSettingsRoute,
+  AdminUsersRoute: AdminUsersRoute,
   RequestsRequestIdRoute: RequestsRequestIdRoute,
   RequestsNewRoute: RequestsNewRoute,
   RequestsIndexRoute: RequestsIndexRoute,

@@ -1,0 +1,56 @@
+---
+description: FleetOps responsive layout conventions — apply to all UI pages and components
+alwaysApply: true
+---
+
+# FleetOps responsive layout
+
+All new pages, forms, tables, and layout changes must work from 320px through desktop.
+
+## Breakpoints (Tailwind v4)
+
+| Token | px | Use for |
+|-------|-----|---------|
+| `sm` | 640 | 2-col forms/KPIs, show secondary header text |
+| `md` | 768 | Table ↔ card list split |
+| `lg` | 1024 | Sidebar vs bottom nav, auth split, 2-col dashboards |
+| `xl` | 1280 | Dense KPI rows only (5+ columns) |
+
+**Nav boundary is `lg`**, not `md`.
+
+## Required patterns
+
+### Tables
+Dual render — never horizontal-scroll-only on mobile:
+
+```tsx
+<ul className="divide-y md:hidden">{/* cards */}</ul>
+<div className="hidden overflow-x-auto md:block">
+  <table className="data-table w-full">…</table>
+</div>
+```
+
+See `src/routes/fleet.tsx`.
+
+### Multi-column pages
+Prefer `lg:grid-cols-[…]` for operational 2-column layouts (dispatch, request detail, dashboards). Reserve `xl:` for 4+ KPI columns.
+
+### Page structure
+- Wrap content in `page-stack`
+- Forms: `form-grid sm:grid-cols-2`
+- KPIs: `<KpiGrid>` or `sm:grid-cols-2 lg:grid-cols-4`
+- Use `min-w-0`, `truncate`, `flex-wrap` on headers and toolbars
+
+### Auth
+Layout lives in `src/styles.css` (`.auth-split-*`). Below `lg`: hide hero visual, form-only card. Do not animate/pan the whole SVG.
+
+### Shell
+`AppShell` handles mobile nav — do not add shadcn `SidebarProvider`. Main content uses `pb-20 lg:pb-4` for bottom nav clearance.
+
+## Checklist before shipping UI
+
+- [ ] Readable at 375px width
+- [ ] Touch targets ≥ 44px where tappable
+- [ ] No required horizontal scroll for primary actions
+- [ ] Header actions wrap (`flex-wrap`)
+- [ ] Inputs use `text-base` on mobile (see `styles.css` 640px rule — prevents iOS zoom)
