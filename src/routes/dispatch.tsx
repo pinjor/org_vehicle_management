@@ -1,11 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Car, Clock, Radar, Route as RouteIcon, Wrench } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { LookupChip, LookupMetaChip } from "@/components/lookup-chip";
 import { ChipGroup, EmptyState, KpiCard, KpiGrid, MetaChip, Panel } from "@/components/fleet-ui";
 import { Button } from "@/components/ui/button";
-import { useActiveTrips, useRequests, useVehicles } from "@/lib/queries";
+import { useAuth } from "@/lib/auth";
+import { useActiveTrips, useDecideRequest, useRequests, useVehicles } from "@/lib/queries";
 import { formatDateTime, relativeTime } from "@/lib/fleet";
 
 const DISPATCH_UI_KEY = "fleetops.dispatch.ui";
@@ -40,10 +42,12 @@ export const Route = createFileRoute("/dispatch")({
 });
 
 function DispatchPage() {
+  const { user } = useAuth();
   const { data } = useRequests();
   const trips = useActiveTrips();
   const vehicles = useVehicles();
-  const queue = (data ?? []).filter((r) => ["submitted", "under_review", "approved"].includes(r.status));
+  const decide = useDecideRequest();
+  const queue = (data ?? []).filter((r) => ["submitted", "approved"].includes(r.status));
 
   const [collapsed, setCollapsedState] = useState<DispatchSections>(() => {
     try {
@@ -86,25 +90,54 @@ function DispatchPage() {
       <ul className="divide-y divide-border/60">
         {[...queue]
           .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-          .map((r) => (
-            <li key={r.id}>
-              <Link to="/requests/$requestId" params={{ requestId: r.id }} className={cnQueueItem()}>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="truncate text-sm font-medium">{r.reference}</p>
-                  <LookupChip group="priority" value={r.priority} />
-                </div>
-                <p className="truncate text-xs text-muted-foreground">{r.requester_name}</p>
-                <ChipGroup className="mt-1.5">
-                  <LookupChip group="request_status" value={r.status} />
-                  <LookupMetaChip group="trip_type" value={r.trip_type} />
-                  <MetaChip label={`${r.passenger_count} pax`} tone="neutral" />
-                </ChipGroup>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Pickup {formatDateTime(r.pickup_at)} · {relativeTime(r.pickup_at)}
-                </p>
-              </Link>
-            </li>
-          ))}
+          .map((r) => {
+            const canReject = !!user && r.status === "submitted";
+            return (
+              <li key={r.id} className="relative">
+                <Link
+                  to="/requests/$requestId"
+                  params={{ requestId: r.id }}
+                  className={cnQueueItem(canReject)}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-sm font-medium">{r.reference}</p>
+                    <LookupChip group="priority" value={r.priority} />
+                  </div>
+                  <p className="truncate text-xs text-muted-foreground">{r.requester_name}</p>
+                  <ChipGroup className="mt-1.5">
+                    <LookupChip group="request_status" value={r.status} />
+                    <LookupMetaChip group="trip_type" value={r.trip_type} />
+                    <MetaChip label={`${r.passenger_count} pax`} tone="neutral" />
+                  </ChipGroup>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Pickup {formatDateTime(r.pickup_at)} · {relativeTime(r.pickup_at)}
+                  </p>
+                </Link>
+                {canReject ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="btn-reject absolute right-3 bottom-2.5 h-7 px-2 text-xs"
+                    disabled={decide.isPending}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      decide.mutate(
+                        { requestId: r.id, approve: false, actorId: user.id },
+                        {
+                          onSuccess: () => toast.success(`Rejected ${r.reference}`),
+                          onError: (err) => toast.error(err.message),
+                        },
+                      );
+                    }}
+                  >
+                    Reject
+                  </Button>
+                ) : null}
+              </li>
+            );
+          })}
       </ul>
     );
 
@@ -310,6 +343,11 @@ function DispatchPage() {
   );
 }
 
-function cnQueueItem() {
-  return "block w-full px-4 py-3 text-left transition-colors hover:bg-primary/5";
+function cnQueueItem(withReject = false) {
+  return [
+    "block w-full px-4 py-3 text-left transition-colors hover:bg-primary/5",
+    withReject ? "pb-10" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }

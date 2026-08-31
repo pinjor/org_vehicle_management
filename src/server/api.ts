@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { query } from "./db";
+import { query, pool } from "./db";
 import {
   clearSessionCookie,
   getUserFromRequest,
@@ -744,13 +744,31 @@ app.get("/api/trips/:id/history", async (c) => {
 // ——— Fleet ———
 app.get("/api/vehicles", async (c) => {
   requireUser(c);
-  const { rows } = await query(`select * from vehicles order by fleet_number`);
+  const { rows } = await query(`
+    select v.*,
+      d.id as primary_driver_id,
+      d.full_name as primary_driver_name,
+      d.driver_code as primary_driver_code,
+      d.phone as primary_driver_phone
+    from vehicles v
+    left join drivers d on d.id = v.primary_driver_id
+    order by v.fleet_number
+  `);
   return json(c, rows);
 });
 
 app.get("/api/vehicles/:id", async (c) => {
   requireUser(c);
-  const { rows } = await query(`select * from vehicles where id = $1`, [c.req.param("id")]);
+  const { rows } = await query(
+    `select v.*,
+      d.full_name as primary_driver_name,
+      d.driver_code as primary_driver_code,
+      d.phone as primary_driver_phone
+     from vehicles v
+     left join drivers d on d.id = v.primary_driver_id
+     where v.id = $1`,
+    [c.req.param("id")],
+  );
   if (!rows[0]) return c.json({ error: "Not found" }, 404);
   return json(c, rows[0]);
 });
@@ -759,11 +777,43 @@ app.patch("/api/vehicles/:id", async (c) => {
   requireUser(c);
   if (!isDispatcher(c.get("user")!.roles)) throw new Error("Not authorised");
   const patch = await c.req.json<Record<string, unknown>>();
-  const keys = Object.keys(patch);
-  const sets = keys.map((k, i) => `${k} = $${i + 1}`);
-  const vals = [...Object.values(patch), c.req.param("id")];
-  const { rows } = await query(`update vehicles set ${sets.join(", ")} where id = $${vals.length} returning *`, vals);
-  return json(c, rows[0]);
+  const vehicleId = c.req.param("id");
+
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    if ("primary_driver_id" in patch) {
+      const driverId = patch.primary_driver_id ? String(patch.primary_driver_id) : null;
+      if (driverId) {
+        await client.query(
+          `update vehicles set primary_driver_id = null where primary_driver_id = $1 and id <> $2`,
+          [driverId, vehicleId],
+        );
+      }
+    }
+    const keys = Object.keys(patch);
+    const sets = keys.map((k, i) => `${k} = $${i + 1}`);
+    const vals = [...Object.values(patch), vehicleId];
+    const { rows } = await client.query(
+      `update vehicles set ${sets.join(", ")} where id = $${vals.length} returning *`,
+      vals,
+    );
+    const vehicle = rows[0] as { id: string; category: string; primary_driver_id: string | null };
+    // Driver category follows linked vehicle category
+    if (vehicle.primary_driver_id) {
+      await client.query(`update drivers set allowed_categories = ARRAY[$1]::text[] where id = $2`, [
+        vehicle.category,
+        vehicle.primary_driver_id,
+      ]);
+    }
+    await client.query("commit");
+    return json(c, vehicle);
+  } catch (e) {
+    await client.query("rollback");
+    throw e;
+  } finally {
+    client.release();
+  }
 });
 
 app.post("/api/vehicles", async (c) => {
@@ -776,36 +826,128 @@ app.post("/api/vehicles", async (c) => {
     category: string;
     brand?: string;
     model?: string;
+    model_year?: number | null;
+    color?: string | null;
     seat_capacity: number;
+    luggage_capacity?: number;
+    fuel_type?: string;
+    transmission?: string;
+    has_ac?: boolean;
+    is_vip?: boolean;
+    ownership?: string;
     branch?: string;
+    primary_driver_id?: string | null;
+    registration_expiry?: string | null;
+    fitness_expiry?: string | null;
+    insurance_expiry?: string | null;
+    tax_token_expiry?: string | null;
+    odometer_km?: number;
+    last_service_km?: number;
+    last_service_date?: string | null;
+    service_interval_km?: number;
+    last_repair_date?: string | null;
+    last_repair_summary?: string | null;
+    operational_status?: string;
+    notes?: string | null;
   }>();
-  const { rows } = await query(
-    `insert into vehicles (
-      registration_number, fleet_number, name, category, brand, model, seat_capacity, branch
-    ) values ($1, $2, $3, $4, $5, $6, $7, $8) returning *`,
-    [
-      body.registration_number.trim(),
-      body.fleet_number.trim(),
-      body.name.trim(),
-      body.category,
-      body.brand?.trim() ?? "",
-      body.model?.trim() ?? "",
-      body.seat_capacity,
-      body.branch?.trim() || "Head Office",
-    ],
-  );
-  return json(c, rows[0]);
+  const primaryDriverId = body.primary_driver_id ? String(body.primary_driver_id) : null;
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    if (primaryDriverId) {
+      await client.query(`update vehicles set primary_driver_id = null where primary_driver_id = $1`, [
+        primaryDriverId,
+      ]);
+    }
+    const { rows } = await client.query(
+      `insert into vehicles (
+        registration_number, fleet_number, name, category, brand, model, model_year, color,
+        seat_capacity, luggage_capacity, fuel_type, transmission, has_ac, is_vip, ownership, branch,
+        primary_driver_id, registration_expiry, fitness_expiry, insurance_expiry, tax_token_expiry,
+        odometer_km, last_service_km, last_service_date, service_interval_km,
+        last_repair_date, last_repair_summary, operational_status, notes
+      ) values (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
+        $22,$23,$24,$25,$26,$27,$28,$29
+      ) returning *`,
+      [
+        body.registration_number.trim(),
+        body.fleet_number.trim(),
+        body.name.trim(),
+        body.category,
+        body.brand?.trim() ?? "",
+        body.model?.trim() ?? "",
+        body.model_year ?? null,
+        body.color?.trim() || null,
+        body.seat_capacity,
+        body.luggage_capacity ?? 2,
+        body.fuel_type ?? "petrol",
+        body.transmission ?? "manual",
+        body.has_ac ?? true,
+        body.is_vip ?? false,
+        body.ownership ?? "owned",
+        body.branch?.trim() || "Head Office",
+        primaryDriverId,
+        body.registration_expiry || null,
+        body.fitness_expiry || null,
+        body.insurance_expiry || null,
+        body.tax_token_expiry || null,
+        body.odometer_km ?? 0,
+        body.last_service_km ?? 0,
+        body.last_service_date || null,
+        body.service_interval_km ?? 10000,
+        body.last_repair_date || null,
+        body.last_repair_summary?.trim() || null,
+        body.operational_status ?? "available",
+        body.notes?.trim() || null,
+      ],
+    );
+    if (primaryDriverId) {
+      await client.query(`update drivers set allowed_categories = ARRAY[$1]::text[] where id = $2`, [
+        body.category,
+        primaryDriverId,
+      ]);
+    }
+    await client.query("commit");
+    return json(c, rows[0]);
+  } catch (e) {
+    await client.query("rollback");
+    throw e;
+  } finally {
+    client.release();
+  }
 });
 
 app.get("/api/drivers", async (c) => {
   requireUser(c);
-  const { rows } = await query(`select * from drivers order by driver_code`);
+  const { rows } = await query(`
+    select d.*,
+      v.id as primary_vehicle_id,
+      v.fleet_number as primary_vehicle_fleet,
+      v.name as primary_vehicle_name,
+      v.registration_number as primary_vehicle_reg,
+      v.category as primary_vehicle_category
+    from drivers d
+    left join vehicles v on v.primary_driver_id = d.id
+    order by d.driver_code
+  `);
   return json(c, rows);
 });
 
 app.get("/api/drivers/:id", async (c) => {
   requireUser(c);
-  const { rows } = await query(`select * from drivers where id = $1`, [c.req.param("id")]);
+  const { rows } = await query(
+    `select d.*,
+      v.id as primary_vehicle_id,
+      v.fleet_number as primary_vehicle_fleet,
+      v.name as primary_vehicle_name,
+      v.registration_number as primary_vehicle_reg,
+      v.category as primary_vehicle_category
+    from drivers d
+    left join vehicles v on v.primary_driver_id = d.id
+    where d.id = $1`,
+    [c.req.param("id")],
+  );
   if (!rows[0]) return c.json({ error: "Not found" }, 404);
   return json(c, rows[0]);
 });
@@ -814,11 +956,70 @@ app.patch("/api/drivers/:id", async (c) => {
   requireUser(c);
   if (!isDispatcher(c.get("user")!.roles)) throw new Error("Not authorised");
   const patch = await c.req.json<Record<string, unknown>>();
-  const keys = Object.keys(patch);
-  const sets = keys.map((k, i) => `${k} = $${i + 1}`);
-  const vals = [...Object.values(patch), c.req.param("id")];
-  const { rows } = await query(`update drivers set ${sets.join(", ")} where id = $${vals.length} returning *`, vals);
-  return json(c, rows[0]);
+  const driverId = c.req.param("id");
+  const primaryVehicleId =
+    "primary_vehicle_id" in patch
+      ? patch.primary_vehicle_id
+        ? String(patch.primary_vehicle_id)
+        : null
+      : undefined;
+  // Categories come from primary vehicle — ignore client toggles
+  const { primary_vehicle_id: _drop, allowed_categories: _cats, ...driverPatch } = patch;
+
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    if (primaryVehicleId !== undefined) {
+      await client.query(`update vehicles set primary_driver_id = null where primary_driver_id = $1`, [
+        driverId,
+      ]);
+      if (primaryVehicleId) {
+        await client.query(`update vehicles set primary_driver_id = $1 where id = $2`, [
+          driverId,
+          primaryVehicleId,
+        ]);
+        const { rows: veh } = await client.query<{ category: string }>(
+          `select category from vehicles where id = $1`,
+          [primaryVehicleId],
+        );
+        if (veh[0]?.category) {
+          driverPatch.allowed_categories = [veh[0].category];
+        }
+      } else {
+        driverPatch.allowed_categories = [];
+      }
+    }
+
+    let row: Record<string, unknown> | undefined;
+    const keys = Object.keys(driverPatch);
+    if (keys.length > 0) {
+      const sets = keys.map((k, i) => `${k} = $${i + 1}`);
+      const vals = [...Object.values(driverPatch), driverId];
+      const { rows } = await client.query(
+        `update drivers set ${sets.join(", ")} where id = $${vals.length} returning *`,
+        vals,
+      );
+      row = rows[0] as Record<string, unknown>;
+    } else {
+      const { rows } = await client.query(`select * from drivers where id = $1`, [driverId]);
+      row = rows[0] as Record<string, unknown>;
+    }
+
+    const { rows: linked } = await client.query(
+      `select id as primary_vehicle_id, fleet_number as primary_vehicle_fleet,
+        name as primary_vehicle_name, registration_number as primary_vehicle_reg,
+        category as primary_vehicle_category
+       from vehicles where primary_driver_id = $1 limit 1`,
+      [driverId],
+    );
+    await client.query("commit");
+    return json(c, { ...row, ...(linked[0] ?? { primary_vehicle_id: null, primary_vehicle_category: null }) });
+  } catch (e) {
+    await client.query("rollback");
+    throw e;
+  } finally {
+    client.release();
+  }
 });
 
 app.post("/api/drivers", async (c) => {
@@ -828,35 +1029,87 @@ app.post("/api/drivers", async (c) => {
     full_name: string;
     driver_code: string;
     phone: string;
+    alternate_phone?: string | null;
+    email?: string | null;
     license_number: string;
+    license_type?: string;
     license_expiry?: string | null;
     shift?: string;
-    allowed_categories?: string[];
     experience_years?: number;
+    blood_group?: string | null;
+    emergency_contact?: string | null;
+    address?: string | null;
+    date_of_joining?: string | null;
+    rating?: number;
+    current_status?: string;
+    primary_vehicle_id?: string | null;
   }>();
   const phone = normalizeBdPhone(body.phone);
   if (!phone) return c.json({ error: "Invalid phone number" }, 400);
-  const { rows } = await query(
-    `insert into drivers (
-      full_name, driver_code, phone, license_number, license_expiry, shift, allowed_categories, experience_years
-    ) values ($1, $2, $3, $4, $5, $6, $7, $8) returning *`,
-    [
-      body.full_name.trim(),
-      body.driver_code.trim(),
-      phone,
-      body.license_number.trim(),
-      body.license_expiry || null,
-      body.shift ?? "day",
-      body.allowed_categories?.length ? body.allowed_categories : ["sedan", "suv"],
-      body.experience_years ?? 0,
-    ],
-  );
-  await query(
-    `insert into user_roster (full_name, phone, role) values ($1, $2, 'driver')
-     on conflict (phone) do update set full_name = excluded.full_name, role = 'driver', is_active = true, updated_at = now()`,
-    [body.full_name.trim(), phone],
-  );
-  return json(c, rows[0]);
+  const altPhone = body.alternate_phone ? normalizeBdPhone(body.alternate_phone) : null;
+  if (body.alternate_phone && !altPhone) return c.json({ error: "Invalid alternate phone" }, 400);
+
+  const primaryVehicleId = body.primary_vehicle_id ? String(body.primary_vehicle_id) : null;
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    let categories: string[] = [];
+    if (primaryVehicleId) {
+      const { rows: veh } = await client.query<{ category: string }>(
+        `select category from vehicles where id = $1`,
+        [primaryVehicleId],
+      );
+      if (veh[0]?.category) categories = [veh[0].category];
+    }
+    const { rows } = await client.query(
+      `insert into drivers (
+        full_name, driver_code, phone, alternate_phone, email, license_number, license_type,
+        license_expiry, shift, allowed_categories, experience_years, blood_group, emergency_contact,
+        address, date_of_joining, rating, current_status
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) returning *`,
+      [
+        body.full_name.trim(),
+        body.driver_code.trim(),
+        phone,
+        altPhone,
+        body.email?.trim() || null,
+        body.license_number.trim(),
+        body.license_type?.trim() || "Professional",
+        body.license_expiry || null,
+        body.shift ?? "day",
+        categories,
+        body.experience_years ?? 0,
+        body.blood_group?.trim() || null,
+        body.emergency_contact?.trim() || null,
+        body.address?.trim() || null,
+        body.date_of_joining || null,
+        body.rating ?? 4.5,
+        body.current_status ?? "available",
+      ],
+    );
+    const driver = rows[0] as { id: string; full_name: string };
+    if (primaryVehicleId) {
+      await client.query(`update vehicles set primary_driver_id = null where primary_driver_id = $1`, [
+        driver.id,
+      ]);
+      await client.query(`update vehicles set primary_driver_id = $1 where id = $2`, [
+        driver.id,
+        primaryVehicleId,
+      ]);
+    }
+    await client.query(
+      `insert into user_roster (full_name, phone, role) values ($1, $2, 'driver')
+       on conflict (phone) do update set full_name = excluded.full_name, role = 'driver', is_active = true, updated_at = now()`,
+      [body.full_name.trim(), phone],
+    );
+    await client.query("commit");
+    return json(c, driver);
+  } catch (e) {
+    await client.query("rollback");
+    throw e;
+  } finally {
+    client.release();
+  }
 });
 
 // ——— Reference data ———
@@ -884,7 +1137,7 @@ app.get("/api/notifications", async (c) => {
   const { rows } = await query(
     `select * from notifications
      where user_id = $1 or (audience_role is not null and exists (
-       select 1 from user_roles ur where ur.user_id = $1 and ur.role::text = audience_role
+       select 1 from user_roles ur where ur.user_id = $1 and ur.role = audience_role
      ))
      order by created_at desc limit 30`,
     [user.id],
@@ -894,10 +1147,42 @@ app.get("/api/notifications", async (c) => {
 
 app.patch("/api/notifications/:id/read", async (c) => {
   const user = requireUser(c);
-  await query(`update notifications set is_read = true where id = $1 and user_id = $2`, [
-    c.req.param("id"),
-    user.id,
-  ]);
+  await query(
+    `update notifications set is_read = true
+     where id = $1
+       and is_read = false
+       and (
+         user_id = $2
+         or (
+           audience_role is not null
+           and exists (
+             select 1 from user_roles ur
+             where ur.user_id = $2 and ur.role = audience_role
+           )
+         )
+       )`,
+    [c.req.param("id"), user.id],
+  );
+  return c.json({ ok: true });
+});
+
+app.post("/api/notifications/read-all", async (c) => {
+  const user = requireUser(c);
+  await query(
+    `update notifications set is_read = true
+     where is_read = false
+       and (
+         user_id = $1
+         or (
+           audience_role is not null
+           and exists (
+             select 1 from user_roles ur
+             where ur.user_id = $1 and ur.role = audience_role
+           )
+         )
+       )`,
+    [user.id],
+  );
   return c.json({ ok: true });
 });
 

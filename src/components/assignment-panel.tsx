@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AssignmentSkeleton } from "@/components/loading-skeletons";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -10,45 +9,75 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { StatusChip, EmptyState } from "@/components/fleet-ui";
-import { useAssignRequest, useDrivers, useRecommendations, useVehicles } from "@/lib/queries";
-import { DRIVER_STATUS, explainMatch, formatDateTime } from "@/lib/fleet";
+import { EmptyState } from "@/components/fleet-ui";
+import { useAssignRequest, useDrivers, useVehicles } from "@/lib/queries";
 
 export function AssignmentPanel({
   requestId,
   passengers,
-  expectedEnd,
   disabled,
   onAssigned,
+  initialVehicleId,
+  initialDriverId,
+  changeMode = false,
 }: {
   requestId: string;
   passengers: number;
-  expectedEnd: string;
+  expectedEnd?: string;
   disabled?: boolean;
   onAssigned?: () => void;
+  initialVehicleId?: string | null;
+  initialDriverId?: string | null;
+  /** Re-assign an existing trip pairing */
+  changeMode?: boolean;
 }) {
-  const { data, isLoading } = useRecommendations(requestId, !disabled);
   const vehicles = useVehicles();
   const drivers = useDrivers();
   const assign = useAssignRequest();
-  const [selected, setSelected] = useState<string | null>(null);
-  const [vehicleId, setVehicleId] = useState<string>("");
-  const [driverId, setDriverId] = useState<string>("");
+  const [vehicleId, setVehicleId] = useState(initialVehicleId ?? "");
+  const [driverId, setDriverId] = useState(initialDriverId ?? "");
 
   const availableVehicles = useMemo(
     () =>
       (vehicles.data ?? []).filter(
         (v) =>
-          v.operational_status === "available" &&
+          (v.operational_status === "available" || v.id === initialVehicleId) &&
           Number(v.seat_capacity) >= passengers,
       ),
-    [vehicles.data, passengers],
+    [vehicles.data, passengers, initialVehicleId],
   );
 
   const availableDrivers = useMemo(
-    () => (drivers.data ?? []).filter((d) => d.current_status === "available"),
-    [drivers.data],
+    () =>
+      (drivers.data ?? []).filter(
+        (d) => d.current_status === "available" || d.id === initialDriverId,
+      ),
+    [drivers.data, initialDriverId],
   );
+
+  const vehicle = availableVehicles.find((v) => v.id === vehicleId);
+  const driver = availableDrivers.find((d) => d.id === driverId);
+  const canSubmit = !!vehicle && !!driver;
+
+  function pickVehicle(id: string) {
+    setVehicleId(id);
+    const v = availableVehicles.find((x) => x.id === id);
+    // Suggest linked primary driver, but keep driver changeable
+    if (v?.primary_driver_id) {
+      const linked = availableDrivers.find((d) => d.id === v.primary_driver_id);
+      if (linked) setDriverId(linked.id);
+    }
+  }
+
+  function pickDriver(id: string) {
+    setDriverId(id);
+    const d = availableDrivers.find((x) => x.id === id);
+    // Suggest linked primary vehicle, but keep vehicle changeable
+    if (d?.primary_vehicle_id) {
+      const linked = availableVehicles.find((v) => v.id === d.primary_vehicle_id);
+      if (linked) setVehicleId(linked.id);
+    }
+  }
 
   if (disabled) {
     return (
@@ -59,20 +88,17 @@ export function AssignmentPanel({
       />
     );
   }
-  if (isLoading) return <AssignmentSkeleton />;
 
-  const recs = data ?? [];
-
-  function runAssign(vid: string, did: string, label?: string) {
-    if (!vid || !did) {
+  function runAssign() {
+    if (!vehicle || !driver) {
       toast.error("Pick both a vehicle and a driver");
       return;
     }
     assign.mutate(
-      { requestId, vehicleId: vid, driverId: did },
+      { requestId, vehicleId: vehicle.id, driverId: driver.id },
       {
         onSuccess: () => {
-          toast.success(label ?? "Vehicle and driver assigned");
+          toast.success(changeMode ? "Assignment updated" : "Vehicle and driver assigned");
           onAssigned?.();
         },
         onError: (e) => toast.error(e.message),
@@ -80,150 +106,78 @@ export function AssignmentPanel({
     );
   }
 
-  return (
-    <div className="space-y-4">
-      <section className="space-y-2.5 rounded-lg border border-border bg-surface-2/40 p-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Pick vehicle & driver
-        </p>
-        <div className="grid gap-2.5 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="assign-vehicle" className="text-xs">
-              Vehicle
-            </Label>
-            <Select value={vehicleId || undefined} onValueChange={setVehicleId}>
-              <SelectTrigger id="assign-vehicle" className="h-10 w-full">
-                <SelectValue placeholder="Select vehicle" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableVehicles.map((v) => (
-                  <SelectItem key={v.id} value={v.id}>
-                    {v.fleet_number} · {v.name} ({v.seat_capacity} seats)
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {availableVehicles.length === 0 && (
-              <p className="text-[11px] text-muted-foreground">No available vehicles fit this passenger count.</p>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="assign-driver" className="text-xs">
-              Driver
-            </Label>
-            <Select value={driverId || undefined} onValueChange={setDriverId}>
-              <SelectTrigger id="assign-driver" className="h-10 w-full">
-                <SelectValue placeholder="Select driver" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableDrivers.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.full_name}
-                    {d.phone ? ` · ${d.phone}` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {availableDrivers.length === 0 && (
-              <p className="text-[11px] text-muted-foreground">No drivers marked available.</p>
-            )}
-          </div>
-        </div>
-        <Button
-          size="sm"
-          className="min-h-10 w-full sm:w-auto"
-          disabled={assign.isPending || !vehicleId || !driverId}
-          tooltip="Assign the selected vehicle and driver"
-          onClick={() => runAssign(vehicleId, driverId)}
-        >
-          Assign selected
-        </Button>
-      </section>
+  const linkedHint =
+    vehicle?.primary_driver_id && vehicle.primary_driver_id === driverId
+      ? "Primary pair"
+      : vehicle?.primary_driver_id && driverId && vehicle.primary_driver_id !== driverId
+        ? "Not the vehicle’s primary driver — allowed"
+        : null;
 
-      {recs.length === 0 ? (
-        <EmptyState
-          compact
-          title="No ranked matches"
-          description="Use the dropdowns above, or free a vehicle/driver for recommendations."
-        />
-      ) : (
-        <section className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Best matches
-          </p>
-          <ul className="list-stagger space-y-2.5">
-            {recs.slice(0, 6).map((rec, i) => {
-              const key = `${rec.vid}-${rec.did}`;
-              const { reasons, warnings } = explainMatch(rec, passengers, expectedEnd);
-              const open = selected === key;
-              return (
-                <li key={key} className="list-stagger-item rounded-lg border border-border p-3">
-                  <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">
-                        {i === 0 && (
-                          <span className="mr-2 text-xs font-semibold text-primary">Best match</span>
-                        )}
-                        {rec.vname} · {rec.vreg}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {rec.dname} · {rec.dphone} · rating {rec.rating} ·{" "}
-                        {DRIVER_STATUS[rec.dstatus]?.label ?? rec.dstatus}
-                      </p>
-                    </div>
-                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                      <StatusChip
-                        label={`Score ${Math.round(rec.score)}`}
-                        tone={i === 0 ? "success" : "neutral"}
-                      />
-                      <Button
-                        size="sm"
-                        className="min-h-9 w-full sm:w-auto"
-                        disabled={assign.isPending}
-                        tooltip={`Dispatch ${rec.vreg} with ${rec.dname}`}
-                        onClick={() =>
-                          runAssign(rec.vid, rec.did, `Assigned ${rec.vreg} to ${rec.dname}`)
-                        }
-                      >
-                        Assign
-                      </Button>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="mt-2 text-xs text-muted-foreground underline-offset-2 hover:underline"
-                    onClick={() => setSelected(open ? null : key)}
-                  >
-                    {open ? "Hide reasoning" : "Why this match?"}
-                  </button>
-                  {open && (
-                    <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
-                      <ul className="space-y-1 text-muted-foreground">
-                        {reasons.map((r) => (
-                          <li key={r}>+ {r}</li>
-                        ))}
-                      </ul>
-                      <ul className="space-y-1 text-warning-foreground">
-                        {warnings.length === 0 && (
-                          <li className="text-muted-foreground">No warnings</li>
-                        )}
-                        {warnings.map((w) => (
-                          <li key={w}>! {w}</li>
-                        ))}
-                      </ul>
-                      {rec.next_assignment_at && (
-                        <p className="text-muted-foreground sm:col-span-2">
-                          Next booking for this pair: {formatDateTime(rec.next_assignment_at)}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+  return (
+    <section className="space-y-2.5">
+      <p className="text-[11px] text-muted-foreground">
+        Pick vehicle and driver separately. Linked primary fills as a suggestion — you can change
+        either.
+      </p>
+      <div className="grid gap-2.5 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="assign-vehicle" className="text-xs">
+            Vehicle
+          </Label>
+          <Select value={vehicleId || undefined} onValueChange={pickVehicle}>
+            <SelectTrigger id="assign-vehicle" className="h-10 w-full">
+              <SelectValue placeholder="Select vehicle" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableVehicles.map((v) => (
+                <SelectItem key={v.id} value={v.id}>
+                  {v.fleet_number} · {v.name} ({v.seat_capacity} seats)
+                  {v.primary_driver_name ? ` · primary: ${v.primary_driver_name}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="assign-driver" className="text-xs">
+            Driver
+          </Label>
+          <Select value={driverId || undefined} onValueChange={pickDriver}>
+            <SelectTrigger id="assign-driver" className="h-10 w-full">
+              <SelectValue placeholder="Select driver" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableDrivers.map((d) => (
+                <SelectItem key={d.id} value={d.id}>
+                  {d.full_name}
+                  {d.primary_vehicle_fleet ? ` · primary: ${d.primary_vehicle_fleet}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      {availableVehicles.length === 0 && (
+        <p className="text-[11px] text-muted-foreground">No available vehicles with enough seats.</p>
       )}
-    </div>
+      {availableDrivers.length === 0 && (
+        <p className="text-[11px] text-muted-foreground">No available drivers.</p>
+      )}
+      {canSubmit && (
+        <p className="text-[11px] text-muted-foreground">
+          Will assign: {vehicle.fleet_number} · {vehicle.name} + {driver.full_name}
+          {linkedHint ? ` (${linkedHint})` : ""}
+        </p>
+      )}
+      <Button
+        size="sm"
+        className="min-h-10 w-full sm:w-auto"
+        disabled={assign.isPending || !canSubmit}
+        tooltip={changeMode ? "Update vehicle and driver for this trip" : "Assign vehicle and driver"}
+        onClick={runAssign}
+      >
+        {changeMode ? "Update assignment" : "Assign selected"}
+      </Button>
+    </section>
   );
 }

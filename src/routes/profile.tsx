@@ -268,16 +268,10 @@ function DriverProfile({ profile }: { profile: ProfileRow }) {
               )
             }
           />
-          {driver?.allowed_categories && driver.allowed_categories.length > 0 && (
+          {driver?.primary_vehicle_category && (
             <DataRow
               label={t("profile.categories")}
-              value={
-                <ChipGroup>
-                  {driver.allowed_categories.map((c) => (
-                    <MetaChip key={c} label={c.replace(/_/g, " ")} tone="neutral" />
-                  ))}
-                </ChipGroup>
-              }
+              value={<MetaChip label={driver.primary_vehicle_category.replace(/_/g, " ")} tone="neutral" />}
             />
           )}
         </Panel>

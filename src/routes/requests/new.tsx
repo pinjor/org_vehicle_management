@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeftRight, ArrowRight, MapPin, Plus, Route as RouteIcon, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { z } from "zod";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { AddFormSection, AddPageHero } from "@/components/add-form-shell";
@@ -8,15 +9,22 @@ import { EmployeeRideBooking } from "@/components/employee-ride-booking";
 import { Field } from "@/components/fleet-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
 import { useLookupOptions } from "@/lib/lookups-context";
 import { useCreateRequest, useDepartments, useLocations } from "@/lib/queries";
 import { toLocalInput } from "@/lib/fleet";
-import { formatBdPhone, isValidBdPhone, maskBdPhoneInput, normalizeBdPhone } from "@/lib/phone";
+import { normalizeBdPhone } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
+const newRequestSearchSchema = z.object({
+  /** Saved location id for Where to? (drop / destination). */
+  to: z.string().optional(),
+  /** @deprecated alias — same as to */
+  pickup: z.string().optional(),
+});
+
 export const Route = createFileRoute("/requests/new")({
+  validateSearch: (search) => newRequestSearchSchema.parse(search),
   head: () => ({
     meta: [
       { title: "New vehicle request — FleetOps" },
@@ -28,7 +36,10 @@ export const Route = createFileRoute("/requests/new")({
 
 function NewRequestPage() {
   const { isEmployee, isDispatcher } = useAuth();
-  if (isEmployee && !isDispatcher) return <EmployeeRideBooking />;
+  const search = Route.useSearch();
+  if (isEmployee && !isDispatcher) {
+    return <EmployeeRideBooking initialDropId={search.to ?? search.pickup} />;
+  }
   return <OpsNewRequestForm />;
 }
 
@@ -183,18 +194,13 @@ function OpsNewRequestForm() {
   const locations = useLocations();
   const create = useCreateRequest();
   const tripTypes = useLookupOptions("trip_type");
-  const vehicleCategories = useLookupOptions("vehicle_category");
 
   const now = new Date();
   const defaultTripType = tripTypes[0]?.value_key ?? "one_way";
-  const defaultCategory = vehicleCategories[0]?.value_key ?? "sedan";
   const [tripCategory, setTripCategory] = useState<TripCategory>(defaultTripType);
   const [form, setForm] = useState({
-    requesterName: "",
-    requesterPhone: "",
     departmentId: "",
     purpose: "",
-    requestedCategory: defaultCategory,
     passengerCount: 1,
     pickupAt: toLocalInput(new Date(now.getTime() + 3600_000)),
     dropAt: toLocalInput(new Date(now.getTime() + 3 * 3600_000)),
@@ -208,7 +214,6 @@ function OpsNewRequestForm() {
     dropAddress: "",
     dropLat: null as number | null,
     dropLng: null as number | null,
-    remarks: "",
   });
   const [intermediateStops, setIntermediateStops] = useState<RouteStopDraft[]>(() => [newRouteStopDraft()]);
   const [finalDestination, setFinalDestination] = useState<RouteStopDraft>(() =>
@@ -273,9 +278,9 @@ function OpsNewRequestForm() {
       return;
     }
 
-    const phone = normalizeBdPhone(form.requesterPhone);
+    const phone = normalizeBdPhone(profile?.phone ?? "");
     if (!phone) {
-      toast.error("Enter a valid Bangladesh mobile number");
+      toast.error("Add a Bangladesh mobile number to your profile first");
       return;
     }
 
@@ -350,14 +355,14 @@ function OpsNewRequestForm() {
     try {
       const res = await create.mutateAsync({
         requesterId: user.id,
-        requesterName: form.requesterName || profile?.full_name || "Employee",
+        requesterName: profile?.full_name || "Employee",
         requesterPhone: phone,
         departmentId: form.departmentId || null,
         costCenter: "",
         purpose: form.purpose,
         tripType: tripCategory,
         priority: "normal",
-        requestedCategory: form.requestedCategory || null,
+        requestedCategory: null,
         passengerCount: Number(form.passengerCount) || 1,
         pickupAt: form.pickupAt,
         expectedEndAt,
@@ -366,7 +371,7 @@ function OpsNewRequestForm() {
         returnExpectedEndAt: null,
         requiresAc: true,
         specialRequirements: "",
-        remarks: form.remarks,
+        remarks: "",
         points,
         passengers: [],
       });
@@ -586,19 +591,6 @@ function OpsNewRequestForm() {
                   ))}
                 </select>
               </Field>
-              <Field label="Vehicle type">
-                <select
-                  className={selectClass}
-                  value={form.requestedCategory}
-                  onChange={(e) => set("requestedCategory", e.target.value)}
-                >
-                  {vehicleCategories.map((c) => (
-                    <option key={c.value_key} value={c.value_key}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
               <Field label="Passengers">
                 <Input
                   className="h-9"
@@ -606,56 +598,6 @@ function OpsNewRequestForm() {
                   min={1}
                   value={form.passengerCount}
                   onChange={(e) => set("passengerCount", Number(e.target.value))}
-                />
-              </Field>
-            </AddFormSection>
-
-            <AddFormSection title="Contact" columns={2} compact>
-              <Field label="Your name">
-                <Input
-                  className="h-9"
-                  value={form.requesterName}
-                  placeholder={profile?.full_name ?? ""}
-                  onChange={(e) => set("requesterName", e.target.value)}
-                />
-              </Field>
-              <Field label="Mobile (BD)" hint="01XXXXXXXXX">
-                <div className="flex">
-                  <span className="inline-flex h-9 items-center rounded-l-md border border-r-0 border-input bg-muted px-2.5 text-sm text-muted-foreground">
-                    +880
-                  </span>
-                  <Input
-                    className="h-9 rounded-l-none"
-                    inputMode="numeric"
-                    value={form.requesterPhone}
-                    onChange={(e) => set("requesterPhone", maskBdPhoneInput(e.target.value))}
-                    placeholder="1711234567"
-                    maxLength={10}
-                    required
-                  />
-                </div>
-                {form.requesterPhone && !isValidBdPhone(form.requesterPhone) && (
-                  <p className="mt-1 text-xs text-destructive">Invalid BD mobile</p>
-                )}
-                {profile?.phone && !form.requesterPhone && (
-                  <button
-                    type="button"
-                    className="mt-1 text-xs text-primary hover:underline"
-                    onClick={() => {
-                      const local = profile.phone?.replace(/^\+880/, "").replace(/^0/, "") ?? "";
-                      set("requesterPhone", local);
-                    }}
-                  >
-                    Use {formatBdPhone(profile.phone)}
-                  </button>
-                )}
-              </Field>
-              <Field label="Remarks" className="sm:col-span-2">
-                <Textarea
-                  value={form.remarks}
-                  onChange={(e) => set("remarks", e.target.value)}
-                  rows={2}
-                  className="min-h-0"
                 />
               </Field>
             </AddFormSection>

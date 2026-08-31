@@ -21,9 +21,7 @@ export const ROSTER_ROLE: Record<RosterRole, { label: string; tone: Tone }> = {
 };
 
 export const REQUEST_STATUS: Record<string, { label: string; tone: Tone }> = {
-  draft: { label: "Draft", tone: "neutral" },
   submitted: { label: "Awaiting review", tone: "warning" },
-  under_review: { label: "Under review", tone: "warning" },
   approved: { label: "Approved", tone: "info" },
   rejected: { label: "Rejected", tone: "danger" },
   assigned: { label: "Assigned", tone: "primary" },
@@ -46,9 +44,7 @@ export const TRIP_STATUS: Record<string, { label: string; tone: Tone }> = {
   return_in_transit: { label: "Return journey", tone: "success" },
   completed: { label: "Completed", tone: "neutral" },
   cancelled: { label: "Cancelled", tone: "danger" },
-  no_show: { label: "No show", tone: "danger" },
   breakdown: { label: "Breakdown", tone: "danger" },
-  emergency_stop: { label: "Emergency stop", tone: "danger" },
 };
 
 export const VEHICLE_STATUS: Record<string, { label: string; tone: Tone }> = {
@@ -81,8 +77,9 @@ export const PRIORITY: Record<string, { label: string; tone: Tone }> = {
 };
 
 export const TRIP_TYPE: Record<string, { label: string; tone: Tone }> = {
-  one_time: { label: "One-time", tone: "info" },
+  one_way: { label: "One-way", tone: "info" },
   round_trip: { label: "Round trip", tone: "primary" },
+  multi_stop: { label: "Multi-stop", tone: "warning" },
 };
 
 export const SHIFT: Record<string, { label: string; tone: Tone }> = {
@@ -112,7 +109,6 @@ export const UNAVAILABILITY_STATUS: Record<string, { label: string; tone: Tone }
   approved_unavailable: { label: "Unavailable", tone: "danger" },
   sent_to_maintenance: { label: "In maintenance", tone: "info" },
   rejected: { label: "Rejected", tone: "neutral" },
-  info_requested: { label: "Info requested", tone: "warning" },
   resolved: { label: "Resolved", tone: "success" },
 };
 

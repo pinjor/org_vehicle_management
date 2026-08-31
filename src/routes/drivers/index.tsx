@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
 import { useLookupOptions } from "@/lib/lookups-context";
-import { useCreateDriver, useDrivers } from "@/lib/queries";
+import { useCreateDriver, useDrivers, useVehicles } from "@/lib/queries";
 import { isValidBdPhone, maskBdPhoneInput, normalizeBdPhone } from "@/lib/phone";
 import { DRIVER_STATUS, SHIFT, formatDate, complianceTone, daysUntil } from "@/lib/fleet";
 
@@ -30,37 +30,41 @@ export const Route = createFileRoute("/drivers/")({
 
 function DriversPage() {
   const { isDispatcher } = useAuth();
-  const categoryOptions = useLookupOptions("vehicle_category");
+  const statusOptions = useLookupOptions("driver_status");
   const { data, isLoading } = useDrivers();
+  const { data: fleetVehicles } = useVehicles();
   const create = useCreateDriver();
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
+  const emptyForm = {
     full_name: "",
     driver_code: "",
     phoneLocal: "",
+    altPhoneLocal: "",
+    email: "",
     license_number: "",
+    license_type: "Professional",
     license_expiry: "",
     shift: "day",
     experience_years: "0",
-    allowed_categories: ["sedan", "suv"] as string[],
-  });
+    blood_group: "",
+    emergency_contact: "",
+    address: "",
+    date_of_joining: "",
+    rating: "4.5",
+    current_status: "available",
+    primary_vehicle_id: "",
+  };
+  const [form, setForm] = useState(emptyForm);
   const rows = (data ?? []).filter((d) =>
-    `${d.driver_code} ${d.full_name} ${d.phone} ${d.shift}`.toLowerCase().includes(search.toLowerCase()),
+    `${d.driver_code} ${d.full_name} ${d.phone} ${d.shift} ${d.primary_vehicle_fleet ?? ""} ${d.primary_vehicle_name ?? ""} ${d.primary_vehicle_reg ?? ""} ${d.primary_vehicle_category ?? ""}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
   );
   const available = (data ?? []).filter((d) => d.current_status === "available").length;
   const expiring = (data ?? []).filter(
     (d) => d.license_expiry && (new Date(d.license_expiry).getTime() - Date.now()) / 86400000 < 90,
   ).length;
-
-  function toggleCategory(cat: string) {
-    setForm((f) => ({
-      ...f,
-      allowed_categories: f.allowed_categories.includes(cat)
-        ? f.allowed_categories.filter((c) => c !== cat)
-        : [...f.allowed_categories, cat],
-    }));
-  }
 
   async function addDriver(e: React.FormEvent) {
     e.preventDefault();
@@ -69,8 +73,9 @@ function DriversPage() {
       toast.error("Enter a valid Bangladesh mobile number");
       return;
     }
-    if (form.allowed_categories.length === 0) {
-      toast.error("Select at least one vehicle category");
+    const altPhone = form.altPhoneLocal ? normalizeBdPhone(form.altPhoneLocal) : null;
+    if (form.altPhoneLocal && !altPhone) {
+      toast.error("Alternate phone is not a valid BD mobile");
       return;
     }
     try {
@@ -78,23 +83,23 @@ function DriversPage() {
         full_name: form.full_name.trim(),
         driver_code: form.driver_code.trim(),
         phone,
+        alternate_phone: altPhone,
+        email: form.email.trim() || null,
         license_number: form.license_number.trim(),
+        license_type: form.license_type.trim() || "Professional",
         license_expiry: form.license_expiry || null,
         shift: form.shift,
-        allowed_categories: form.allowed_categories,
         experience_years: Number(form.experience_years) || 0,
+        blood_group: form.blood_group.trim() || null,
+        emergency_contact: form.emergency_contact.trim() || null,
+        address: form.address.trim() || null,
+        date_of_joining: form.date_of_joining || null,
+        rating: Number(form.rating) || 4.5,
+        current_status: form.current_status,
+        primary_vehicle_id: form.primary_vehicle_id || null,
       });
       toast.success("Driver added to roster");
-      setForm({
-        full_name: "",
-        driver_code: "",
-        phoneLocal: "",
-        license_number: "",
-        license_expiry: "",
-        shift: "day",
-        experience_years: "0",
-        allowed_categories: ["sedan", "suv"],
-      });
+      setForm(emptyForm);
       setShowForm(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not add driver");
@@ -117,101 +122,88 @@ function DriversPage() {
         open={showForm}
         onOpenChange={setShowForm}
         title="Add driver"
-        description="Phone unique · added to signup roster."
+        description="Same fields as driver profile — phone unique · added to signup roster."
         icon={<Users />}
         tone="success"
         formId="add-driver-form"
         onSubmit={addDriver}
         submitDisabled={!isValidBdPhone(form.phoneLocal)}
         submitPending={create.isPending}
+        wide
       >
         <AddFormSection title="Personal" columns={1}>
           <Field label="Full name">
-            <input
-              className="app-field-input"
-              value={form.full_name}
-              onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))}
-              required
-            />
+            <input className="app-field-input" value={form.full_name} onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))} required />
           </Field>
           <Field label="Driver code">
-            <input
-              className="app-field-input"
-              value={form.driver_code}
-              onChange={(e) => setForm((f) => ({ ...f, driver_code: e.target.value }))}
-              placeholder="DRV-007"
-              required
-            />
+            <input className="app-field-input" value={form.driver_code} onChange={(e) => setForm((f) => ({ ...f, driver_code: e.target.value }))} placeholder="DRV-007" required />
           </Field>
           <Field label="Mobile">
-            <AppPhoneField
-              value={form.phoneLocal}
-              onChange={(v) => setForm((f) => ({ ...f, phoneLocal: maskBdPhoneInput(v) }))}
-            />
+            <AppPhoneField value={form.phoneLocal} onChange={(v) => setForm((f) => ({ ...f, phoneLocal: maskBdPhoneInput(v) }))} />
+          </Field>
+          <Field label="Alternate mobile">
+            <AppPhoneField value={form.altPhoneLocal} onChange={(v) => setForm((f) => ({ ...f, altPhoneLocal: maskBdPhoneInput(v) }))} />
+          </Field>
+          <Field label="Email">
+            <input type="email" className="app-field-input" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+          </Field>
+          <Field label="Joined">
+            <input type="date" className="app-field-input" value={form.date_of_joining} onChange={(e) => setForm((f) => ({ ...f, date_of_joining: e.target.value }))} />
+          </Field>
+          <Field label="Blood group">
+            <input className="app-field-input" value={form.blood_group} onChange={(e) => setForm((f) => ({ ...f, blood_group: e.target.value }))} />
+          </Field>
+          <Field label="Emergency contact">
+            <input className="app-field-input" value={form.emergency_contact} onChange={(e) => setForm((f) => ({ ...f, emergency_contact: e.target.value }))} />
+          </Field>
+          <Field label="Address">
+            <input className="app-field-input" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
           </Field>
         </AddFormSection>
+
         <AddFormSection title="Licence" columns={1}>
           <Field label="Licence number">
-            <input
-              className="app-field-input"
-              value={form.license_number}
-              onChange={(e) => setForm((f) => ({ ...f, license_number: e.target.value }))}
-              required
-            />
+            <input className="app-field-input" value={form.license_number} onChange={(e) => setForm((f) => ({ ...f, license_number: e.target.value }))} required />
+          </Field>
+          <Field label="Licence type">
+            <input className="app-field-input" value={form.license_type} onChange={(e) => setForm((f) => ({ ...f, license_type: e.target.value }))} />
           </Field>
           <Field label="Licence expiry">
-            <input
-              className="app-field-input"
-              type="date"
-              value={form.license_expiry}
-              onChange={(e) => setForm((f) => ({ ...f, license_expiry: e.target.value }))}
-            />
+            <input className="app-field-input" type="date" value={form.license_expiry} onChange={(e) => setForm((f) => ({ ...f, license_expiry: e.target.value }))} />
+          </Field>
+        </AddFormSection>
+
+        <AddFormSection title="Work" columns={1}>
+          <Field label="Experience (years)">
+            <input className="app-field-input" type="number" min={0} value={form.experience_years} onChange={(e) => setForm((f) => ({ ...f, experience_years: e.target.value }))} />
+          </Field>
+          <Field label="Rating">
+            <input className="app-field-input" type="number" step="0.1" min={0} max={5} value={form.rating} onChange={(e) => setForm((f) => ({ ...f, rating: e.target.value }))} />
           </Field>
           <Field label="Shift">
-            <select
-              className="app-field-select"
-              value={form.shift}
-              onChange={(e) => setForm((f) => ({ ...f, shift: e.target.value }))}
-            >
+            <select className="app-field-select" value={form.shift} onChange={(e) => setForm((f) => ({ ...f, shift: e.target.value }))}>
               {Object.entries(SHIFT).map(([value, meta]) => (
-                <option key={value} value={value}>
-                  {meta.label}
-                </option>
+                <option key={value} value={value}>{meta.label}</option>
               ))}
             </select>
           </Field>
-        </AddFormSection>
-        <AddFormSection title="Work" columns={1}>
-          <Field label="Experience (years)">
-            <input
-              className="app-field-input"
-              type="number"
-              min={0}
-              value={form.experience_years}
-              onChange={(e) => setForm((f) => ({ ...f, experience_years: e.target.value }))}
-            />
+          <Field label="Duty status">
+            <select className="app-field-select" value={form.current_status} onChange={(e) => setForm((f) => ({ ...f, current_status: e.target.value }))}>
+              {statusOptions.map((s) => (
+                <option key={s.value_key} value={s.value_key}>{s.label}</option>
+              ))}
+            </select>
           </Field>
-          <Field label="Categories" hint="Tap to toggle">
-            <div className="flex flex-wrap gap-1.5">
-              {categoryOptions.map((opt) => {
-                const active = form.allowed_categories.includes(opt.value_key);
-                return (
-                  <button
-                    key={opt.value_key}
-                    type="button"
-                    className={
-                      "rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors " +
-                      (active
-                        ? "border-primary/40 bg-primary/10 text-primary"
-                        : "border-border bg-background text-muted-foreground hover:border-primary/25")
-                    }
-                    onClick={() => toggleCategory(opt.value_key)}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
+          <Field label="Primary vehicle" hint="Optional — category follows this vehicle">
+            <select className="app-field-select" value={form.primary_vehicle_id} onChange={(e) => setForm((f) => ({ ...f, primary_vehicle_id: e.target.value }))}>
+              <option value="">— Not linked —</option>
+              {(fleetVehicles ?? []).map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.fleet_number} · {v.name} · {v.category}
+                  {v.primary_driver_id ? " (reassign)" : ""}
+                </option>
+              ))}
+            </select>
           </Field>
         </AddFormSection>
       </AddEntityPanel>
@@ -269,6 +261,14 @@ function DriversPage() {
                       <MetaChip label={SHIFT[d.shift]?.label ?? d.shift} tone={SHIFT[d.shift]?.tone ?? "neutral"} />
                       <MetaChip label={`${d.experience_years} yr`} tone="neutral" />
                       <MetaChip label={`★ ${d.rating}`} tone="warning" />
+                      <MetaChip
+                        label={
+                          d.primary_vehicle_fleet
+                            ? `Vehicle · ${d.primary_vehicle_fleet}`
+                            : "No vehicle linked"
+                        }
+                        tone={d.primary_vehicle_fleet ? "success" : "neutral"}
+                      />
                     </ChipGroup>
                   </Link>
                 </li>
@@ -279,7 +279,8 @@ function DriversPage() {
               <thead className="bg-muted/40">
                 <tr>
                   <th className="px-4 py-2 text-left">Driver</th>
-                  <th className="px-4 py-2 text-left">Categories</th>
+                  <th className="px-4 py-2 text-left">Vehicle</th>
+                  <th className="px-4 py-2 text-left">Category</th>
                   <th className="px-4 py-2 text-left">Shift</th>
                   <th className="px-4 py-2 text-right">Experience</th>
                   <th className="px-4 py-2 text-right">Rating</th>
@@ -299,11 +300,29 @@ function DriversPage() {
                       </Link>
                     </td>
                     <td>
-                      <ChipGroup>
-                        {(d.allowed_categories ?? []).slice(0, 3).map((c) => (
-                          <MetaChip key={c} label={c} tone="info" />
-                        ))}
-                      </ChipGroup>
+                      {d.primary_vehicle_id && d.primary_vehicle_fleet ? (
+                        <Link
+                          to="/fleet/$vehicleId"
+                          params={{ vehicleId: d.primary_vehicle_id }}
+                          className="block hover:text-primary"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <p className="font-medium">
+                            {d.primary_vehicle_fleet}
+                            {d.primary_vehicle_name ? ` · ${d.primary_vehicle_name}` : ""}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{d.primary_vehicle_reg}</p>
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td>
+                      {d.primary_vehicle_category ? (
+                        <MetaChip label={d.primary_vehicle_category.replace(/_/g, " ")} tone="info" />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </td>
                     <td>
                       <MetaChip label={SHIFT[d.shift]?.label ?? d.shift} tone={SHIFT[d.shift]?.tone ?? "neutral"} />

@@ -73,6 +73,20 @@ from (values
 ) as d(code, nm, phone, lic, lic_days, cats, exp, shift, status, rating, blood, emg)
 where not exists (select 1 from public.drivers dr where dr.driver_code = d.code);
 
+-- Stick vehicles to primary drivers (1:1). Unpaired units need a link before assign.
+update public.vehicles v
+set primary_driver_id = d.id
+from public.drivers d
+where v.primary_driver_id is null
+  and (
+    (v.fleet_number = 'FL-001' and d.driver_code = 'DRV-001')
+    or (v.fleet_number = 'FL-002' and d.driver_code = 'DRV-002')
+    or (v.fleet_number = 'FL-006' and d.driver_code = 'DRV-006')
+    or (v.fleet_number = 'FL-010' and d.driver_code = 'DRV-003')
+    or (v.fleet_number = 'FL-011' and d.driver_code = 'DRV-004')
+    or (v.fleet_number = 'FL-016' and d.driver_code = 'DRV-005')
+  );
+
 -- Roster: only listed phones may create accounts.
 insert into public.user_roster (full_name, phone, role) values
   ('Transport Admin', '+8801711000001', 'admin_hr'),

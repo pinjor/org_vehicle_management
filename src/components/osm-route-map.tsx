@@ -2,110 +2,114 @@ import { useEffect, useRef, useState } from "react";
 import { Clock, MapPin, Route } from "lucide-react";
 import type { MapPoint } from "@/components/trip-map";
 import {
+  createDotMarker,
+  fitLatLngs,
+  maplibregl,
+  markerColor,
+  mountMap,
+  upsertRouteLine,
+  whenStyleReady,
+} from "@/lib/free-map";
+import {
   addMinutesToLocalInput,
   fetchOsrmRouteWithMeta,
   formatLocalClock,
   formatOsrmDuration,
-  osmTileLayer,
   pointsWithCoords,
   type LatLng,
   type OsrmSummary,
 } from "@/lib/osm";
 import { cn } from "@/lib/utils";
 
-import "leaflet/dist/leaflet.css";
-
-/** Static OSM map: stop markers + OSRM driving path. */
+/** Static map: roadmap basemap + OSRM driving path. */
 export function OsmRouteMap({
   points,
   focusIndex = 0,
   className = "h-56 w-full",
   showSummary = true,
-  /** Pickup local datetime `YYYY-MM-DDTHH:mm` — used for ETA. */
   departAt,
+  framed = true,
 }: {
   points: MapPoint[];
   focusIndex?: number;
   className?: string;
   showSummary?: boolean;
   departAt?: string;
+  framed?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<import("leaflet").Map | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
   const [summary, setSummary] = useState<OsrmSummary | null>(null);
+  const [ready, setReady] = useState(false);
 
   const coords = pointsWithCoords(points);
+  const hasCoords = coords.length > 0;
   const pointsKey = points.map((p) => `${p.latitude},${p.longitude},${p.point_type}`).join("|");
 
+  // Remount when coords appear (container was absent on first paint).
   useEffect(() => {
-    if (!containerRef.current || coords.length === 0) return;
+    if (!hasCoords) return;
+    const el = containerRef.current;
+    if (!el) return;
+
+    const map = mountMap(el);
+    mapRef.current = map;
+    const cancelReady = whenStyleReady(map, () => setReady(true));
+
+    return () => {
+      cancelReady();
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+      map.remove();
+      mapRef.current = null;
+      setReady(false);
+    };
+  }, [hasCoords]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || coords.length === 0) return;
     let cancelled = false;
 
-    void import("leaflet").then(async (L) => {
-      if (cancelled || !containerRef.current) return;
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
 
-      if (!mapRef.current) {
-        mapRef.current = L.map(containerRef.current, { zoomControl: true, attributionControl: true });
-        osmTileLayer(L).addTo(mapRef.current);
-      }
+    coords.forEach((p, i) => {
+      const marker = createDotMarker(markerColor(p.point_type), i === focusIndex)
+        .setLngLat([p.longitude, p.latitude])
+        .setPopup(
+          new maplibregl.Popup({ offset: 28, className: "fleet-map-popup" }).setHTML(
+            `<strong>${p.name}</strong>${p.address ? `<br/><span style="opacity:.75">${p.address}</span>` : ""}`,
+          ),
+        )
+        .addTo(map);
+      markersRef.current.push(marker);
+    });
 
-      const map = mapRef.current;
-      map.eachLayer((layer) => {
-        if (layer instanceof L.Marker || layer instanceof L.CircleMarker || layer instanceof L.Polyline) {
-          map.removeLayer(layer);
-        }
-      });
-
-      const latlngs: LatLng[] = coords.map((p) => [p.latitude, p.longitude]);
-      const { route, summary: meta } = await fetchOsrmRouteWithMeta(latlngs);
-      if (cancelled) return;
+    const latlngs: LatLng[] = coords.map((p) => [p.latitude, p.longitude]);
+    void fetchOsrmRouteWithMeta(latlngs).then(({ route, summary: meta }) => {
+      if (cancelled || !mapRef.current) return;
       setSummary(meta);
-
-      L.polyline(route, {
-        color: "#2563eb",
-        weight: 5,
-        opacity: 0.85,
-      }).addTo(map);
-
-      coords.forEach((p, i) => {
-        const isPickup = p.point_type === "pickup";
-        const isDest = p.point_type === "destination";
-        const color = isPickup ? "#16a34a" : isDest ? "#dc2626" : "#2563eb";
-        L.circleMarker([p.latitude, p.longitude], {
-          radius: i === focusIndex ? 10 : 8,
-          color: "#fff",
-          weight: 2,
-          fillColor: color,
-          fillOpacity: 1,
-        })
-          .bindPopup(`<strong>${p.name}</strong>${p.address ? `<br/>${p.address}` : ""}`)
-          .addTo(map);
-      });
-
-      map.fitBounds(L.latLngBounds(route.length ? route : latlngs), { padding: [28, 28] });
-      requestAnimationFrame(() => map.invalidateSize());
+      const path = route.length >= 2 ? route : latlngs;
+      upsertRouteLine(map, "route", path);
+      fitLatLngs(map, path);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [pointsKey, focusIndex]);
-
-  useEffect(() => {
-    return () => {
-      mapRef.current?.remove();
-      mapRef.current = null;
-    };
-  }, []);
+  }, [pointsKey, focusIndex, ready]);
 
   const etaLocal =
     summary && departAt ? addMinutesToLocalInput(departAt, summary.durationMin) : null;
 
-  if (!coords.length) {
+  if (!hasCoords) {
     return (
       <div
         className={cn(
-          "grid place-items-center rounded-lg border border-dashed border-border bg-muted/30 text-xs text-muted-foreground",
+          "grid place-items-center bg-muted/30 text-xs text-muted-foreground",
+          framed && "rounded-lg border border-dashed border-border",
           className,
         )}
       >
@@ -116,13 +120,25 @@ export function OsmRouteMap({
     );
   }
 
+  const mapPane = (
+    <div
+      className={cn(
+        "relative overflow-hidden bg-[#e8f0e9]",
+        framed && "rounded-xl border border-border/80 shadow-sm",
+        className,
+      )}
+    >
+      <div ref={containerRef} className="fleet-map h-full w-full" />
+    </div>
+  );
+
+  if (!showSummary) return mapPane;
+
   return (
-    <div className="space-y-2">
-      <div className={cn("relative overflow-hidden rounded-lg border border-border", className)}>
-        <div ref={containerRef} className="h-full w-full min-h-[14rem]" />
-      </div>
-      {showSummary && summary && (
-        <div className="space-y-1 text-xs text-muted-foreground">
+    <div className="min-w-0 space-y-2">
+      {mapPane}
+      {summary && (
+        <div className="min-w-0 space-y-1 break-words text-xs text-muted-foreground">
           <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <Route className="size-3.5 shrink-0 text-primary" />
             <span>

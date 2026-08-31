@@ -95,14 +95,33 @@ export function AdminRequestAlert() {
           </div>
 
           {popup.status === "submitted" ? (
-            <Button
-              onClick={() => void approve()}
-              disabled={decide.isPending}
-              className="w-full"
-              tooltip="Approve and move this request to dispatch assignment"
-            >
-              Approve request
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => void approve()}
+                disabled={decide.isPending}
+                className="flex-1"
+                tooltip="Approve and move this request to dispatch assignment"
+              >
+                Approve
+              </Button>
+              <Button
+                variant="outline"
+                disabled={decide.isPending}
+                className="btn-reject flex-1"
+                tooltip="Reject this request"
+                onClick={() => {
+                  void decide
+                    .mutateAsync({ requestId: popup.id, approve: false, actorId: user.id })
+                    .then(() => {
+                      toast.success("Request rejected");
+                      setPopup(null);
+                    })
+                    .catch((e: Error) => toast.error(e.message));
+                }}
+              >
+                Reject
+              </Button>
+            </div>
           ) : (
             <AssignmentPanel
               requestId={popup.id}

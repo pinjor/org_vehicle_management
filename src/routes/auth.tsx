@@ -1,6 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { z } from "zod";
 import { Eye, EyeOff, Lock, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "@/lib/api-client";
@@ -9,35 +8,33 @@ import { AuthBackground } from "@/components/auth-background";
 import { AuthIllustration } from "@/components/auth-illustration";
 import { StatusChip } from "@/components/fleet-ui";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { ROSTER_ROLE } from "@/lib/fleet";
 import type { RosterLookup } from "@/lib/queries";
 import { isValidBdPhone, maskBdPhoneInput, normalizeBdPhone } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
-const authSearchSchema = z.object({
-  signup: z.boolean().optional(),
-});
-
 export const Route = createFileRoute("/auth")({
-  validateSearch: (search) =>
-    authSearchSchema.parse({
-      signup: search.signup === true || search.signup === "true" || search.signup === "1",
-    }),
   component: AuthPage,
 });
 
-type SignupStep = "phone" | "details";
-type AuthMode = "signin" | "signup";
+type AuthView = "signin" | "set-password";
 
 function AuthPage() {
-  const { signup } = Route.useSearch();
-  const mode: AuthMode = signup ? "signup" : "signin";
-  const [signupStep, setSignupStep] = useState<SignupStep>("phone");
+  const [view, setView] = useState<AuthView>("signin");
   const [phoneLocal, setPhoneLocal] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rosterInfo, setRosterInfo] = useState<RosterLookup | null>(null);
   const [busy, setBusy] = useState(false);
+  const [notEnlistedOpen, setNotEnlistedOpen] = useState(false);
   const { session, refresh } = useAuth();
   const navigate = useNavigate();
 
@@ -46,19 +43,18 @@ function AuthPage() {
   }, [session, navigate]);
 
   useEffect(() => {
-    document.title = mode === "signin" ? "Sign in — FleetOps" : "Create account — FleetOps";
-  }, [mode]);
+    document.title = view === "signin" ? "Sign in — FleetOps" : "Set password — FleetOps";
+  }, [view]);
 
-  useEffect(() => {
-    if (mode === "signin") {
-      setSignupStep("phone");
-      setRosterInfo(null);
-      setPassword("");
-      setShowPassword(false);
-    }
-  }, [mode]);
+  function goSignIn(clearPhone = false) {
+    setView("signin");
+    setRosterInfo(null);
+    setPassword("");
+    setShowPassword(false);
+    if (clearPhone) setPhoneLocal("");
+  }
 
-  async function verifyPhone(e: React.FormEvent) {
+  async function signIn(e: React.FormEvent) {
     e.preventDefault();
     if (!isValidBdPhone(phoneLocal)) {
       toast.error("Enter a valid Bangladesh mobile number (01XXXXXXXXX)");
@@ -66,24 +62,38 @@ function AuthPage() {
     }
     setBusy(true);
     try {
-      const result = await apiGet<RosterLookup>(`/api/roster/lookup?phone=${encodeURIComponent(phoneLocal)}`);
+      const result = await apiGet<RosterLookup>(
+        `/api/roster/lookup?phone=${encodeURIComponent(phoneLocal)}`,
+      );
+
       if (!result.allowed) {
         if (result.reason === "already_registered") {
-          toast.error("This phone already has an account. Please sign in.");
-          void navigate({ to: "/auth", search: {} });
+          if (password.length < 6) {
+            toast.error("Enter your password to sign in");
+            return;
+          }
+          await apiPost("/api/auth/login", { phone: phoneLocal, password });
+          await refresh();
           return;
         }
         if (result.reason === "invalid_phone") {
           toast.error("Invalid Bangladesh mobile number");
           return;
         }
-        toast.error("This phone is not on the admin roster. Contact HR or admin to be added.");
+        setNotEnlistedOpen(true);
         return;
       }
+
+      // On admin roster, no account yet → set password directly
       setRosterInfo(result);
-      setSignupStep("details");
+      setPassword("");
+      setShowPassword(false);
+      setView("set-password");
+      toast.message("Phone found on roster", {
+        description: "Set a password to finish creating your account.",
+      });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not verify phone");
+      toast.error(err instanceof Error ? err.message : "Sign in failed");
     } finally {
       setBusy(false);
     }
@@ -92,6 +102,10 @@ function AuthPage() {
   async function createAccount(e: React.FormEvent) {
     e.preventDefault();
     if (!isValidBdPhone(phoneLocal) || !rosterInfo?.allowed) return;
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
     setBusy(true);
     try {
       await apiPost("/api/auth/signup", { phone: phoneLocal, password });
@@ -104,207 +118,126 @@ function AuthPage() {
     }
   }
 
-  async function signIn(e: React.FormEvent) {
-    e.preventDefault();
-    if (!isValidBdPhone(phoneLocal)) {
-      toast.error("Enter a valid Bangladesh mobile number");
-      return;
-    }
-    setBusy(true);
-    try {
-      await apiPost("/api/auth/login", { phone: phoneLocal, password });
-      await refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Sign in failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const formKey = mode === "signin" ? "signin" : signupStep;
-
   const visualCaption =
-    mode === "signin"
+    view === "signin"
       ? "Plan trips & manage your fleet in one place."
-      : signupStep === "phone"
-        ? "Register with a roster phone number."
-        : "Set a password to finish signup.";
+      : "Set a password to finish signup.";
 
   return (
-    <div className="auth-shell auth-page" data-auth-mode={mode}>
+    <div className="auth-shell auth-page" data-auth-mode={view === "signin" ? "signin" : "signup"}>
       <AuthBackground />
       <div className="auth-page-inner">
-        <div key={formKey} className="auth-form-enter auth-split-frame">
+        <div key={view} className="auth-form-enter auth-split-frame">
           <aside className="auth-split-visual">
             <div className="auth-illus-stage">
-              <AuthIllustration variant={mode === "signin" ? "signin" : "signup"} className="auth-stage-illus" />
+              <AuthIllustration
+                variant={view === "signin" ? "signin" : "signup"}
+                className="auth-stage-illus"
+              />
             </div>
             <p className="auth-visual-caption">{visualCaption}</p>
           </aside>
 
           <section className="auth-split-form">
-            {mode === "signin" ? (
+            {view === "signin" ? (
               <form onSubmit={signIn} className="auth-form-stack">
-                <FormHeader size="md" title="Sign in" description="Use your mobile number and password to access FleetOps." />
+                <FormHeader
+                  size="md"
+                  title="Sign in"
+                  description="Use your roster mobile number. First time? We'll take you to set a password."
+                />
                 <AuthField label="Mobile number">
                   <PhoneInput value={phoneLocal} onChange={setPhoneLocal} />
                 </AuthField>
+                <AuthField label="Password" hint="Leave blank if you haven't created an account yet">
+                  <PasswordInput
+                    value={password}
+                    onChange={setPassword}
+                    show={showPassword}
+                    onToggle={() => setShowPassword((v) => !v)}
+                    required={false}
+                    autoComplete="current-password"
+                  />
+                </AuthField>
+                <Button
+                  type="submit"
+                  className="auth-submit-btn auth-btn w-full"
+                  disabled={busy || !isValidBdPhone(phoneLocal)}
+                  tooltip="Sign in, or continue to set password if your phone is on the roster"
+                >
+                  {busy ? "Please wait…" : "Continue"}
+                </Button>
+                <p className="text-center text-sm text-[color:var(--auth-muted)]">
+                  Must be on the admin roster before you can access FleetOps.
+                </p>
+              </form>
+            ) : (
+              <form onSubmit={createAccount} className="auth-form-stack">
+                <FormHeader
+                  size="md"
+                  title="Set password"
+                  description="Your phone is on the admin roster. Choose a password with at least 6 characters."
+                />
+                <RosterPreview
+                  name={rosterInfo?.full_name ?? "User"}
+                  phone={phoneLocal}
+                  role={rosterInfo?.role}
+                  onEditPhone={() => goSignIn(false)}
+                />
                 <AuthField label="Password">
                   <PasswordInput
                     value={password}
                     onChange={setPassword}
                     show={showPassword}
                     onToggle={() => setShowPassword((v) => !v)}
+                    autoComplete="new-password"
                   />
                 </AuthField>
-                <Button type="submit" className="auth-submit-btn auth-btn w-full" disabled={busy || !isValidBdPhone(phoneLocal)} tooltip="Sign in with your roster phone and password">
-                  {busy ? "Please wait…" : "Sign in"}
+                <Button
+                  type="submit"
+                  className="auth-submit-btn auth-btn w-full"
+                  disabled={busy || password.length < 6}
+                  tooltip="Create your account — you'll sign in automatically"
+                >
+                  {busy ? "Creating…" : "Create account"}
                 </Button>
+                <button
+                  type="button"
+                  className="w-full text-sm text-[color:var(--auth-muted)] hover:text-[color:var(--auth-fg)]"
+                  onClick={() => goSignIn(true)}
+                >
+                  Use a different number
+                </button>
               </form>
-            ) : (
-              <>
-                <SignupSteps
-                  step={signupStep === "phone" ? 1 : 2}
-                  className="auth-steps--signup"
-                  onGoToPhone={
-                    signupStep === "details"
-                      ? () => {
-                          setSignupStep("phone");
-                          setRosterInfo(null);
-                          setPassword("");
-                          setShowPassword(false);
-                        }
-                      : undefined
-                  }
-                />
-                {signupStep === "phone" ? (
-                  <form onSubmit={verifyPhone} className="auth-form-stack">
-                    <FormHeader
-                      size="md"
-                      title="Create account"
-                      description="Your phone must be on the admin roster before you can register."
-                    />
-                    <AuthField label="Mobile number" hint="Pre-registered by admin or HR">
-                      <PhoneInput value={phoneLocal} onChange={setPhoneLocal} />
-                    </AuthField>
-                    <Button type="submit" className="auth-submit-btn auth-btn w-full" disabled={busy || !isValidBdPhone(phoneLocal)} tooltip="Check if your phone is on the admin roster">
-                      {busy ? "Checking…" : "Continue"}
-                    </Button>
-                  </form>
-                ) : (
-                  <form onSubmit={createAccount} className="auth-form-stack">
-                    <FormHeader
-                      size="md"
-                      title="Set password"
-                      description="Choose a password with at least 6 characters."
-                    />
-                    <RosterPreview
-                      name={rosterInfo?.full_name ?? "User"}
-                      phone={phoneLocal}
-                      role={rosterInfo?.role}
-                      onEditPhone={() => {
-                        setSignupStep("phone");
-                        setRosterInfo(null);
-                        setPassword("");
-                        setShowPassword(false);
-                      }}
-                    />
-                    <AuthField label="Password">
-                      <PasswordInput
-                        value={password}
-                        onChange={setPassword}
-                        show={showPassword}
-                        onToggle={() => setShowPassword((v) => !v)}
-                      />
-                    </AuthField>
-                    <Button type="submit" className="auth-submit-btn auth-btn w-full" disabled={busy || password.length < 6} tooltip="Create your account — you'll sign in automatically">
-                      {busy ? "Creating…" : "Create account"}
-                    </Button>
-                    <button
-                      type="button"
-                      className="w-full text-sm text-[color:var(--auth-muted)] hover:text-[color:var(--auth-fg)]"
-                      onClick={() => {
-                        setSignupStep("phone");
-                        setRosterInfo(null);
-                        setPassword("");
-                      }}
-                    >
-                      Use a different number
-                    </button>
-                  </form>
-                )}
-              </>
             )}
-
-            <AuthModeSwitch mode={mode} />
           </section>
         </div>
       </div>
+
+      <Dialog open={notEnlistedOpen} onOpenChange={setNotEnlistedOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Phone not on roster</DialogTitle>
+            <DialogDescription>
+              This number is not enlisted by admin or HR. You cannot create an account until your phone
+              is added to the roster.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Contact your transport admin or HR office and ask them to add{" "}
+            <span className="font-medium text-foreground">
+              {normalizeBdPhone(phoneLocal) ? `+880 ${phoneLocal}` : phoneLocal}
+            </span>{" "}
+            to FleetOps. After that, come back here and continue.
+          </p>
+          <DialogFooter>
+            <Button type="button" onClick={() => setNotEnlistedOpen(false)}>
+              Got it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
-  );
-}
-
-function AuthModeSwitch({ mode }: { mode: AuthMode }) {
-  return (
-    <p className="auth-mode-switch text-center text-sm text-[color:var(--auth-muted)]">
-      {mode === "signin" ? (
-        <>
-          No account?{" "}
-          <Link to="/auth" search={{ signup: true }} className="auth-text-link font-medium hover:underline">
-            Create one
-          </Link>
-        </>
-      ) : (
-        <>
-          Have an account?{" "}
-          <Link to="/auth" search={{}} className="auth-text-link font-medium hover:underline">
-            Sign in
-          </Link>
-        </>
-      )}
-    </p>
-  );
-}
-
-function SignupSteps({
-  step,
-  className,
-  onGoToPhone,
-}: {
-  step: 1 | 2;
-  className?: string;
-  onGoToPhone?: () => void;
-}) {
-  return (
-    <ol className={cn("auth-steps", className)}>
-      {(["Phone", "Password"] as const).map((label, i) => {
-        const n = (i + 1) as 1 | 2;
-        const active = n === step;
-        const done = n < step;
-        const canGoBack = n === 1 && done && !!onGoToPhone;
-
-        return (
-          <li key={label} className={cn("auth-step", active && "is-active", done && "is-done")}>
-            {canGoBack ? (
-              <button
-                type="button"
-                className="auth-step-btn"
-                onClick={onGoToPhone}
-                aria-label="Go back to phone number"
-              >
-                <span className="auth-step-num">✓</span>
-                <span className="auth-step-label">{label}</span>
-              </button>
-            ) : (
-              <>
-                <span className="auth-step-num">{done ? "✓" : n}</span>
-                <span className="auth-step-label">{label}</span>
-              </>
-            )}
-          </li>
-        );
-      })}
-    </ol>
   );
 }
 
@@ -419,11 +352,15 @@ function PasswordInput({
   onChange,
   show,
   onToggle,
+  required = true,
+  autoComplete = "current-password",
 }: {
   value: string;
   onChange: (v: string) => void;
   show: boolean;
   onToggle: () => void;
+  required?: boolean;
+  autoComplete?: string;
 }) {
   return (
     <div className="auth-password-field">
@@ -431,11 +368,11 @@ function PasswordInput({
       <input
         type={show ? "text" : "password"}
         className="auth-field-input auth-field-input--leading auth-field-input--trailing"
-        autoComplete={show ? "off" : "current-password"}
+        autoComplete={show ? "off" : autoComplete}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        minLength={6}
-        required
+        minLength={required ? 6 : undefined}
+        required={required}
       />
       <button
         type="button"

@@ -1,5 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DriverTripPanel } from "@/components/driver-trip-panel";
@@ -22,10 +21,9 @@ export const Route = createFileRoute("/my-trips/$tripId")({
 
 function DriverTripDetailPage() {
   const { tripId } = Route.useParams();
-  const { driverId, user } = useAuth();
+  const { driverId, user, isDispatcher } = useAuth();
   const { t } = useI18n();
   const { data, isLoading } = useDriverTrips(driverId ?? undefined);
-  const [issue, setIssue] = useState("");
 
   if (!driverId || !user) {
     return (
@@ -41,9 +39,16 @@ function DriverTripDetailPage() {
 
   if (isLoading) {
     return (
-      <AppShell title={t("driver.trips.title")} subtitle={t("driver.detail.loading")}>
+      <div className="plan-ride ride-detail ride-detail--driver">
+        <header className="plan-ride__top">
+          <Link to="/my-trips" className="plan-ride__back" aria-label={t("driver.detail.back")}>
+            <ArrowLeft className="size-5" />
+          </Link>
+          <h1 className="plan-ride__title">{t("driver.trips.title")}</h1>
+          <span className="plan-ride__top-spacer" aria-hidden />
+        </header>
         <DetailPageSkeleton />
-      </AppShell>
+      </div>
     );
   }
 
@@ -51,7 +56,14 @@ function DriverTripDetailPage() {
 
   if (!trip) {
     return (
-      <AppShell title={t("driver.trips.title")} subtitle={t("driver.detail.notFoundTitle")}>
+      <div className="plan-ride ride-detail ride-detail--driver">
+        <header className="plan-ride__top">
+          <Link to="/my-trips" className="plan-ride__back" aria-label={t("driver.detail.back")}>
+            <ArrowLeft className="size-5" />
+          </Link>
+          <h1 className="plan-ride__title">{t("driver.trips.title")}</h1>
+          <span className="plan-ride__top-spacer" aria-hidden />
+        </header>
         <EmptyState
           compact
           title={t("driver.detail.notFoundTitle")}
@@ -62,32 +74,14 @@ function DriverTripDetailPage() {
             </Button>
           }
         />
-      </AppShell>
+      </div>
     );
   }
 
-  return (
-    <AppShell
-      title={trip.reference}
-      subtitle={trip.vehicle_requests?.purpose ?? t("driver.detail.assignment")}
-      actions={
-        <Button asChild variant="ghost" size="sm" className="min-h-8 gap-1 px-2" tooltip={t("driver.detail.back")}>
-          <Link to="/my-trips">
-            <ArrowLeft className="size-3.5" />
-            {t("driver.detail.trips")}
-          </Link>
-        </Button>
-      }
-    >
-      <div className="role-dashboard page-stack">
-        <DriverTripPanel
-          trip={trip}
-          driverId={driverId}
-          userId={user.id}
-          issue={issue}
-          onIssueChange={setIssue}
-        />
-      </div>
-    </AppShell>
-  );
+  const requestId = trip.request_id ?? trip.vehicle_requests?.id;
+  if (isDispatcher && requestId) {
+    return <Navigate to="/requests/$requestId" params={{ requestId }} />;
+  }
+
+  return <DriverTripPanel trip={trip} />;
 }

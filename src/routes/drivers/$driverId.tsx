@@ -32,7 +32,7 @@ import {
   SHIFT,
   TRIP_STATUS,
 } from "@/lib/fleet";
-import { useDriver, useDriverTrips, useUpdateDriver } from "@/lib/queries";
+import { useDriver, useDriverTrips, useUpdateDriver, useVehicles } from "@/lib/queries";
 import { formatBdPhone, isValidBdPhone, maskBdPhoneInput, normalizeBdPhone } from "@/lib/phone";
 
 export const Route = createFileRoute("/drivers/$driverId")({
@@ -54,9 +54,9 @@ function DriverProfilePage() {
   const { isDispatcher, isDriver, isAdmin } = useAuth();
   const navigate = useNavigate();
   const statusOptions = useLookupOptions("driver_status");
-  const categoryOptions = useLookupOptions("vehicle_category");
   const { data: driver, isLoading } = useDriver(driverId);
   const { data: trips } = useDriverTrips(driverId);
+  const { data: fleetVehicles } = useVehicles();
   const update = useUpdateDriver();
   const [form, setForm] = useState<Record<string, string | number | string[]>>({});
   const [phoneLocal, setPhoneLocal] = useState("");
@@ -87,8 +87,8 @@ function DriverProfilePage() {
       emergency_contact: driver.emergency_contact ?? "",
       address: driver.address ?? "",
       date_of_joining: driver.date_of_joining ?? "",
-      allowed_categories: driver.allowed_categories ?? [],
       rating: driver.rating,
+      primary_vehicle_id: driver.primary_vehicle_id ?? "",
     });
     setPhoneLocal(driver.phone?.replace(/^\+880/, "").replace(/^0/, "") ?? "");
     setAltPhoneLocal(driver.alternate_phone?.replace(/^\+880/, "").replace(/^0/, "") ?? "");
@@ -122,12 +122,13 @@ function DriverProfilePage() {
 
   const set = (k: string, v: string | number | string[]) => setForm((f) => ({ ...f, [k]: v }));
 
-  function toggleCategory(cat: string) {
-    const cats = (form.allowed_categories as string[]) ?? [];
-    set("allowed_categories", cats.includes(cat) ? cats.filter((c) => c !== cat) : [...cats, cat]);
-  }
-
   const licenceDays = daysUntil(String(form.license_expiry || driver.license_expiry));
+  const vehicleCategory =
+    (form.primary_vehicle_id
+      ? fleetVehicles?.find((v) => v.id === form.primary_vehicle_id)?.category
+      : null) ??
+    driver.primary_vehicle_category ??
+    null;
   const photoUrl = (driver as { photo_url?: string | null }).photo_url ?? null;
 
   async function save(e: React.FormEvent) {
@@ -162,8 +163,8 @@ function DriverProfilePage() {
           emergency_contact: String(form.emergency_contact) || null,
           address: String(form.address) || null,
           date_of_joining: String(form.date_of_joining) || null,
-          allowed_categories: form.allowed_categories as string[],
           rating: Number(form.rating),
+          primary_vehicle_id: String(form.primary_vehicle_id) || null,
         },
       });
       toast.success("Driver profile saved");
@@ -216,8 +217,9 @@ function DriverProfilePage() {
               <KpiCard label="Experience" value={`${driver.experience_years} yr`} hint={driver.license_type} tone="info" />
               <KpiCard label="Rating" value={`★ ${driver.rating}`} hint={`${driver.shift} shift`} tone="primary" />
               <KpiCard
-                label="Vehicle types"
-                value={(driver.allowed_categories ?? []).map((c) => categoryChipLabel(c)).join(", ") || "—"}
+                label="Category"
+                value={vehicleCategory ? categoryChipLabel(vehicleCategory) : "—"}
+                hint={vehicleCategory ? "From primary vehicle" : "Link a vehicle"}
                 tone="neutral"
               />
             </KpiGrid>
@@ -229,6 +231,21 @@ function DriverProfilePage() {
               <DataRow
                 label="Duty status"
                 value={<LookupChip group="driver_status" value={driver.current_status} dot={false} />}
+              />
+              <DataRow
+                label="Primary vehicle"
+                value={
+                  driver.primary_vehicle_id && driver.primary_vehicle_fleet ? (
+                    <EntityProfileLink
+                      to="/fleet/$vehicleId"
+                      params={{ vehicleId: driver.primary_vehicle_id }}
+                      label={`${driver.primary_vehicle_fleet}${driver.primary_vehicle_name ? ` · ${driver.primary_vehicle_name}` : ""}`}
+                      hint={driver.primary_vehicle_reg ?? undefined}
+                    />
+                  ) : (
+                    "— Not linked —"
+                  )
+                }
               />
             </Panel>
           </div>
@@ -315,7 +332,7 @@ function DriverProfilePage() {
             </div>
           </Panel>
 
-          <Panel title="Licence & duty" compact bodyClassName="profile-panel-body">
+          <Panel title="Licence" compact bodyClassName="profile-panel-body">
             <div className="profile-form-fields">
               <Field label="Licence number">
                 <input
@@ -342,7 +359,12 @@ function DriverProfilePage() {
                   disabled={!isDispatcher}
                 />
               </Field>
-              <Field label="Experience (yr)">
+            </div>
+          </Panel>
+
+          <Panel title="Work" compact bodyClassName="profile-panel-body">
+            <div className="profile-form-fields">
+              <Field label="Experience (years)">
                 <input
                   type="number"
                   className="app-field-input"
@@ -377,7 +399,7 @@ function DriverProfilePage() {
                   ))}
                 </select>
               </Field>
-              <Field label="Duty status" className="profile-field-span">
+              <Field label="Duty status">
                 <select
                   className="app-field-select"
                   value={String(form.current_status ?? "")}
@@ -391,37 +413,39 @@ function DriverProfilePage() {
                   ))}
                 </select>
               </Field>
+              <Field label="Primary vehicle" className="profile-field-span" hint="Category follows this vehicle">
+                <select
+                  className="app-field-select"
+                  value={String(form.primary_vehicle_id ?? "")}
+                  onChange={(e) => set("primary_vehicle_id", e.target.value)}
+                  disabled={!isDispatcher}
+                >
+                  <option value="">— Not linked —</option>
+                  {(fleetVehicles ?? []).map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.fleet_number} · {v.name} · {v.category}
+                      {v.primary_driver_id && v.primary_driver_id !== driverId
+                        ? " (reassign)"
+                        : ""}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             </div>
           </Panel>
 
           <Panel
-            title="Vehicle types"
-            description="Allowed categories"
+            title="Category"
+            description="Follows primary vehicle — change the vehicle to change category"
             className="profile-form-span"
             compact
             bodyClassName="profile-panel-body"
           >
-            <div className="flex flex-wrap gap-1.5">
-              {categoryOptions.map((cat) => {
-                const active = ((form.allowed_categories as string[]) ?? []).includes(cat.value_key);
-                return (
-                  <button
-                    key={cat.value_key}
-                    type="button"
-                    disabled={!isDispatcher}
-                    onClick={() => toggleCategory(cat.value_key)}
-                    className={
-                      "rounded-md border px-2.5 py-1 text-xs transition-colors " +
-                      (active
-                        ? "border-primary bg-primary/8 font-medium text-primary"
-                        : "border-border text-muted-foreground")
-                    }
-                  >
-                    {cat.label}
-                  </button>
-                );
-              })}
-            </div>
+            {vehicleCategory ? (
+              <LookupChip group="vehicle_category" value={vehicleCategory} />
+            ) : (
+              <p className="text-sm text-muted-foreground">No primary vehicle linked</p>
+            )}
           </Panel>
 
           {isDispatcher && (

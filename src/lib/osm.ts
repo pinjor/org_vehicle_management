@@ -25,11 +25,11 @@ export async function fetchOsrmRoute(coords: LatLng[]): Promise<LatLng[]> {
     );
     if (!res.ok) return coords;
     const data = (await res.json()) as {
-      routes?: { geometry?: { coordinates?: [number, number][] }[]; distance?: number; duration?: number }[];
+      routes?: { geometry?: { coordinates?: [number, number][] }; distance?: number; duration?: number }[];
     };
     const line = data.routes?.[0]?.geometry?.coordinates;
     if (!line?.length) return coords;
-    return line.map(([lng, lat]) => [lat, lng] as LatLng);
+    return line.map(([lng, lat]: [number, number]) => [lat, lng] as LatLng);
   } catch {
     return coords;
   }
@@ -188,9 +188,14 @@ export async function searchPlaces(query: string, limit = 6): Promise<NominatimR
   }
 }
 
+/** Free street basemap — Esri World Street Map (no API key). */
 export function osmTileLayer(L: typeof import("leaflet")) {
-  return L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom: 19,
-  });
+  return L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+    {
+      attribution:
+        "Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom",
+      maxZoom: 19,
+    },
+  );
 }

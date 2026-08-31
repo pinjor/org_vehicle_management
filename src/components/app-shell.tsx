@@ -27,7 +27,7 @@ import { LanguageToggle } from "@/components/language-toggle";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/i18n/messages";
-import { useMarkNotificationRead, useNotifications } from "@/lib/queries";
+import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotifications } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -47,6 +47,7 @@ type NavItem = {
     | "/maintenance"
     | "/my-trips"
     | "/trips"
+    | "/profile"
     | "/admin/users"
     | "/admin/employees"
     | "/admin/settings";
@@ -70,8 +71,9 @@ const NAV: NavItem[] = [
     roles: "all",
     section: "main",
   },
-  { to: "/requests", label: "My requests", shortLabel: "Requests", icon: ClipboardList, roles: "employee", section: "main" },
+  { to: "/requests", label: "My requests", shortLabel: "Activity", icon: ClipboardList, roles: "employee", section: "main" },
   { to: "/requests/new", label: "New request", shortLabel: "New", icon: RouteIcon, roles: "employee", section: "main" },
+  { to: "/profile", label: "Account", shortLabel: "Account", icon: User, roles: "employee", section: "main" },
   {
     to: "/my-trips",
     label: "My trips",
@@ -208,7 +210,7 @@ function bottomNavOrder(isDispatcher: boolean, isDriver: boolean, isAdmin: boole
   if (isAdmin) return ["/dashboard", "/admin/employees", "/dispatch", "/admin/settings"];
   if (isDispatcher) return ["/dashboard", "/dispatch", "/fleet", "/requests/new"];
   if (isDriver) return ["/dashboard", "/my-trips"];
-  if (isEmployee) return ["/dashboard", "/requests"];
+  if (isEmployee) return ["/dashboard", "/requests", "/profile"];
   return ["/dashboard"];
 }
 
@@ -232,6 +234,7 @@ export function AppShell({
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: notifications } = useNotifications(user?.id);
   const markRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -286,7 +289,7 @@ export function AppShell({
   const showHeaderRequests = isDispatcher;
   const sidebarItems = showHeaderRequests
     ? items.filter((n) => n.to !== "/requests" && n.to !== "/requests/new")
-    : items;
+    : items.filter((n) => !(isEmployee && !isDispatcher && n.to === "/requests/new"));
 
   const bottomKeys = useMemo(
     () => bottomNavOrder(isDispatcher, isDriver, isAdmin, isEmployee),
@@ -310,13 +313,20 @@ export function AppShell({
   const displayPhone = profile?.phone;
   /** Mobile portal (employee / driver): bottom nav only — no hamburger / sheet. Desktop keeps sidebar. */
   const hideMobileSidebar = (isEmployee || isDriver) && !isDispatcher && !isAdmin;
+  const employeeRideChrome = isEmployee && !isDispatcher && !isAdmin;
 
   if (loading) return <WorkspaceSkeleton />;
   if (!session) return null;
 
   return (
     <TooltipProvider delayDuration={0}>
-    <div className={cn("flex min-h-screen bg-background", hideMobileSidebar && "employee-portal")}>
+    <div
+      className={cn(
+        "flex min-h-screen bg-background",
+        hideMobileSidebar && "employee-portal",
+        employeeRideChrome && "employee-portal--ride",
+      )}
+    >
       {isDispatcher && <AdminRequestAlert />}
 
       <aside
@@ -380,33 +390,42 @@ export function AppShell({
       >
         <header
           className={cn(
-            "app-page-header sticky top-0 z-20 flex items-center justify-between gap-x-2",
-            hideMobileSidebar ? "flex-nowrap gap-y-0" : "flex-wrap gap-y-2 gap-x-3",
+            "app-page-header sticky top-0 z-20 items-center gap-x-2",
+            employeeRideChrome
+              ? "app-page-header--ride"
+              : hideMobileSidebar
+                ? "flex flex-nowrap justify-between gap-y-0"
+                : "flex flex-wrap justify-between gap-y-2 gap-x-3",
           )}
         >
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            {!hideMobileSidebar && (
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="size-8 shrink-0 lg:hidden"
-              aria-label="Open menu"
-              tooltip="Open navigation menu"
-              onClick={() => setMenuOpen(true)}
-            >
-              <Menu className="size-4" />
-            </Button>
-            )}
-            <div className="app-page-header__titles min-w-0 flex-1">
-              <h1 className="app-page-header__title">{title}</h1>
-              {subtitle && <p className="app-page-header__subtitle">{subtitle}</p>}
+          {employeeRideChrome ? (
+            <p className="ride-brand-title min-w-0 truncate">FleetOps</p>
+          ) : (
+            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+              {!hideMobileSidebar && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="size-8 shrink-0 lg:hidden"
+                  aria-label="Open menu"
+                  tooltip="Open navigation menu"
+                  onClick={() => setMenuOpen(true)}
+                >
+                  <Menu className="size-4" />
+                </Button>
+              )}
+              <div className="app-page-header__titles min-w-0 flex-1">
+                <h1 className="app-page-header__title">{title}</h1>
+                {subtitle && <p className="app-page-header__subtitle">{subtitle}</p>}
+              </div>
             </div>
-          </div>
+          )}
           <div
             className={cn(
               "flex shrink-0 items-center justify-end gap-1.5 sm:gap-2",
-              hideMobileSidebar ? "w-auto" : "w-full flex-wrap sm:ml-auto sm:w-auto",
+              employeeRideChrome && "ride-header-actions",
+              !employeeRideChrome && !hideMobileSidebar && "w-full flex-wrap sm:ml-auto sm:w-auto",
             )}
           >
             {actions}
@@ -487,9 +506,26 @@ export function AppShell({
                 collisionPadding={12}
                 className="w-[min(100vw-1.5rem,20rem)] max-h-[min(60dvh,18rem)] overflow-hidden p-0 sm:w-80"
               >
-                <p className="border-b border-border px-3 py-2 text-xs font-semibold">
-                  {isDriverPortal ? t("shell.notifications") : "Notifications"}
-                </p>
+                <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+                  <p className="text-xs font-semibold">
+                    {isDriverPortal ? t("shell.notifications") : "Notifications"}
+                  </p>
+                  {unread > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 shrink-0 px-2 text-[11px]"
+                      disabled={markAllRead.isPending}
+                      tooltip={
+                        isDriverPortal ? t("shell.markAllRead") : "Mark all notifications as read"
+                      }
+                      onClick={() => void markAllRead.mutateAsync()}
+                    >
+                      {isDriverPortal ? t("shell.markAllRead") : "Mark all read"}
+                    </Button>
+                  )}
+                </div>
                 <div className="max-h-[min(60vh,18rem)] divide-y divide-border overflow-y-auto">
                   {(notifications ?? []).length === 0 && (
                     <p className="px-3 py-4 text-center text-xs text-muted-foreground">
@@ -497,26 +533,51 @@ export function AppShell({
                     </p>
                   )}
                   {(notifications ?? []).map((n) => (
-                    <button
+                    <div
                       key={n.id}
-                      type="button"
                       className={cn(
-                        "w-full px-3 py-2 text-left transition-colors hover:bg-surface-2/80",
+                        "flex gap-2 px-3 py-2 transition-colors",
                         n.is_read ? "opacity-70" : "bg-surface-2",
                       )}
-                      onClick={() => {
-                        void markRead.mutateAsync(n.id);
-                        if (n.link) window.location.href = n.link;
-                      }}
                     >
-                      <p className="text-sm font-medium">{n.title}</p>
-                      <p className="text-xs text-muted-foreground">{n.body}</p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">{relativeTime(n.created_at)}</p>
-                    </button>
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 text-left hover:opacity-90"
+                        onClick={() => {
+                          if (!n.is_read) void markRead.mutateAsync(n.id);
+                          if (n.link) window.location.href = n.link;
+                        }}
+                      >
+                        <p className="text-sm font-medium">{n.title}</p>
+                        <p className="text-xs text-muted-foreground">{n.body}</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          {relativeTime(n.created_at)}
+                        </p>
+                      </button>
+                      {!n.is_read && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 shrink-0 self-start px-2 text-[11px]"
+                          disabled={markRead.isPending}
+                          tooltip={
+                            isDriverPortal ? t("shell.markRead") : "Mark this notification as read"
+                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void markRead.mutateAsync(n.id);
+                          }}
+                        >
+                          {isDriverPortal ? t("shell.markRead") : "Read"}
+                        </Button>
+                      )}
+                    </div>
                   ))}
                 </div>
               </PopoverContent>
             </Popover>
+            {!employeeRideChrome && (
             <Popover open={accountOpen} onOpenChange={setAccountOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -590,6 +651,16 @@ export function AppShell({
                 </div>
               </PopoverContent>
             </Popover>
+            )}
+            {employeeRideChrome ? (
+              <Link
+                to="/profile"
+                className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground ring-2 ring-black/5"
+                aria-label="Account"
+              >
+                {(profile?.full_name ?? "U").charAt(0).toUpperCase()}
+              </Link>
+            ) : null}
           </div>
         </header>
 
@@ -623,6 +694,12 @@ export function AppShell({
           >
             {bottomItems.map((item) => {
               const active = activeNav === item.to;
+              const Icon =
+                employeeRideChrome && item.to === "/dashboard" ? Car : item.icon;
+              const label =
+                employeeRideChrome && item.to === "/dashboard"
+                  ? "Ride"
+                  : resolveShort(item);
               return (
                 <Link
                   key={item.to}
@@ -631,13 +708,14 @@ export function AppShell({
                   className={cn(
                     "relative flex min-h-11 flex-col items-center justify-center gap-px px-1 py-1.5 text-[10px] font-semibold transition-colors",
                     active ? "text-primary" : "text-muted-foreground",
+                    active && employeeRideChrome && "is-ride-active",
                   )}
                 >
                   {active && (
                     <span className="absolute inset-x-4 top-0 h-0.5 rounded-full bg-primary" />
                   )}
-                  <item.icon className={cn("size-5", active && "stroke-[2.5px]")} />
-                  <span className="max-w-full truncate">{resolveShort(item)}</span>
+                  <Icon className={cn("size-5", active && "stroke-[2.5px]")} />
+                  <span className="max-w-full truncate">{label}</span>
                 </Link>
               );
             })}

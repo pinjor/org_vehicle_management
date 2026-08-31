@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Car, ClipboardList, Clock, Plus, Users, Navigation } from "lucide-react";
-import { DriverHomeIllustration, EmployeeHomeIllustration } from "@/components/employee-home-illustration";
+import { DriverHomeIllustration } from "@/components/employee-home-illustration";
+import { EmployeeRideHome } from "@/components/employee-ride-home";
 import { AppShell } from "@/components/app-shell";
 import { DriverTripPreview } from "@/components/driver-trip-preview";
 import { PanelSkeleton } from "@/components/loading-skeletons";
@@ -38,114 +39,9 @@ function DashboardPage() {
 }
 
 function EmployeeDashboard() {
-  const { profile, user } = useAuth();
-  const firstName = profile?.full_name?.split(" ")[0] ?? "there";
-  const mine = useRequests({ requesterId: user?.id });
-  const rows = mine.data ?? [];
-
-  const activeRide = [...rows]
-    .filter((r) => ["assigned", "in_progress"].includes(r.status))
-    .sort((a, b) => new Date(b.pickup_at).getTime() - new Date(a.pickup_at).getTime())[0];
-
-  const pending = [...rows]
-    .filter((r) => ["submitted", "under_review", "approved"].includes(r.status))
-    .sort((a, b) => new Date(a.pickup_at).getTime() - new Date(b.pickup_at).getTime());
-
   return (
-    <AppShell title={`Hi, ${firstName}`} subtitle="Book a vehicle or check your requests">
-      <div className="role-dashboard page-stack emp-home-dash">
-        <section className="role-dash-cta">
-          <div className="role-dash-cta__copy min-w-0">
-            <p className="role-dash-cta__title">Need a vehicle?</p>
-            <p className="role-dash-cta__desc">One-time, round trip, or multi-stop — submit for dispatch.</p>
-          </div>
-          <div className="role-dash-cta__actions">
-            <Button asChild size="sm" className="min-h-9 flex-1 sm:flex-none" tooltip="Create a new vehicle request">
-              <Link to="/requests/new">
-                <Plus className="size-3.5" /> New request
-              </Link>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="min-h-9 flex-1 sm:flex-none"
-              tooltip="View all your submitted requests"
-            >
-              <Link to="/requests">
-                <ClipboardList className="size-3.5" /> My requests
-              </Link>
-            </Button>
-          </div>
-        </section>
-
-        {activeRide && (
-          <Panel
-            title="Your active ride"
-            description={`${activeRide.reference} · pickup ${formatDateTime(activeRide.pickup_at)}`}
-            tone="info"
-            compact
-            bodyClassName="p-0"
-          >
-            <div className="flex flex-col gap-2.5 p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0 space-y-1">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <LookupChip group="request_status" value={activeRide.status} />
-                  {activeRide.drivers?.full_name && (
-                    <MetaChip label={activeRide.drivers.full_name} tone="primary" />
-                  )}
-                  {activeRide.vehicles?.registration_number && (
-                    <MetaChip label={activeRide.vehicles.registration_number} tone="neutral" />
-                  )}
-                </div>
-                <p className="truncate text-sm text-muted-foreground">{activeRide.purpose}</p>
-              </div>
-              <Button asChild size="sm" className="min-h-9 shrink-0" tooltip="Open live tracking and trip status">
-                <Link to="/requests/$requestId" params={{ requestId: activeRide.id }}>
-                  <Navigation className="size-3.5" /> Track ride
-                </Link>
-              </Button>
-            </div>
-          </Panel>
-        )}
-
-        {pending.length > 0 && (
-          <Panel
-            title="Pending requests"
-            description={`${pending.length} waiting on dispatch`}
-            tone="warning"
-            compact
-            bodyClassName="p-0"
-          >
-            <ul className="divide-y divide-border/60">
-              {pending.map((r) => (
-                <li key={r.id}>
-                  <Link
-                    to="/requests/$requestId"
-                    params={{ requestId: r.id }}
-                    className="role-dash-list-link flex flex-col gap-1 text-left transition-colors hover:bg-muted/40"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-semibold">{r.reference}</p>
-                      <LookupChip group="request_status" value={r.status} />
-                    </div>
-                    <p className="truncate text-xs text-muted-foreground">{r.purpose}</p>
-                    <ChipGroup className="mt-0.5">
-                      <LookupMetaChip group="trip_type" value={r.trip_type} />
-                      <MetaChip label={`${r.passenger_count} pax`} tone="neutral" />
-                    </ChipGroup>
-                    <p className="text-[11px] text-muted-foreground">
-                      Pickup {formatDateTime(r.pickup_at)} · {relativeTime(r.pickup_at)}
-                    </p>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </Panel>
-        )}
-
-        <EmployeeHomeIllustration />
-      </div>
+    <AppShell title="FleetOps" subtitle="Book a vehicle">
+      <EmployeeRideHome />
     </AppShell>
   );
 }
@@ -235,7 +131,7 @@ function DispatcherDashboard() {
 
   const rows = requests.data ?? [];
   const incoming = [...rows]
-    .filter((r) => ["submitted", "under_review", "approved"].includes(r.status))
+    .filter((r) => ["submitted", "approved"].includes(r.status))
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   const availableVehicles = (vehicles.data ?? []).filter((v) => v.operational_status === "available");

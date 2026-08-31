@@ -50,7 +50,7 @@ function EmployeeProfilePage() {
     );
   }
 
-  const active = requests.filter((r) => ["submitted", "under_review", "approved", "assigned", "in_progress"].includes(r.status));
+  const active = requests.filter((r) => ["submitted", "approved", "assigned", "in_progress"].includes(r.status));
   const completed = requests.filter((r) => ["completed", "cancelled", "rejected"].includes(r.status));
 
   return (

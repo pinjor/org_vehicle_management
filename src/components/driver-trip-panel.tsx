@@ -1,16 +1,17 @@
 import { Link } from "@tanstack/react-router";
 import { useRef } from "react";
-import { Clock } from "lucide-react";
+import { ArrowLeft, Car } from "lucide-react";
 import { toast } from "sonner";
 import { LiveTripMap } from "@/components/live-trip-map";
-import { Panel, RouteTimeline, StatusChip } from "@/components/fleet-ui";
+import { LookupChip } from "@/components/lookup-chip";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/i18n/messages";
-import { useAdvanceTrip, usePingTripLocation, useReportVehicleIssue } from "@/lib/queries";
-import { TRIP_STATUS, formatDateTime, nextDriverActions } from "@/lib/fleet";
+import { useAdvanceTrip, usePingTripLocation } from "@/lib/queries";
+import { formatDateTime, nextDriverActions } from "@/lib/fleet";
+import { formatPickupLabel, pointTone, trackFocusIndex } from "@/lib/ride-detail";
 import type { LatLng } from "@/lib/osm";
+import { cn } from "@/lib/utils";
 
 type TripPoint = {
   sequence: number;
@@ -39,30 +40,6 @@ type DriverTrip = {
   } | null;
 };
 
-/** Index of next waypoint the driver should head toward. */
-function mapFocusIndex(status: string, points: TripPoint[], stopIndex = 0) {
-  const pickupIdx = points.findIndex((p) => p.point_type === "pickup");
-  const destIdx = points.findIndex((p) => p.point_type === "destination");
-  const stopIndices = points
-    .map((p, i) => (p.point_type === "stop" ? i : -1))
-    .filter((i) => i >= 0);
-
-  if (["driver_assigned", "driver_confirmed", "heading_to_pickup", "arrived_pickup"].includes(status)) {
-    return Math.max(0, pickupIdx);
-  }
-  if (status === "return_in_transit" || status === "return_pending") {
-    return Math.max(0, pickupIdx >= 0 ? pickupIdx : points.length - 1);
-  }
-  if (["passenger_picked_up", "in_transit", "stop_reached"].includes(status)) {
-    if (stopIndex < stopIndices.length) return stopIndices[stopIndex]!;
-    return Math.max(0, destIdx >= 0 ? destIdx : points.length - 1);
-  }
-  if (["destination_reached", "passenger_dropped"].includes(status)) {
-    return Math.max(0, destIdx >= 0 ? destIdx : points.length - 1);
-  }
-  return Math.min(1, Math.max(0, points.length - 1));
-}
-
 function actionCopy(
   t: (key: MessageKey, vars?: Record<string, string | number>) => string,
   action: string,
@@ -86,24 +63,9 @@ function actionCopy(
   return { label: t(labelKey), hint: t(hintKey) };
 }
 
-export function DriverTripPanel({
-  trip,
-  driverId,
-  userId,
-  issue,
-  onIssueChange,
-  compact = false,
-}: {
-  trip: DriverTrip;
-  driverId: string;
-  userId: string;
-  issue: string;
-  onIssueChange: (v: string) => void;
-  compact?: boolean;
-}) {
+export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
   const { t } = useI18n();
   const advance = useAdvanceTrip();
-  const report = useReportVehicleIssue();
   const ping = usePingTripLocation();
   const lastPingAt = useRef(0);
   const lastPos = useRef<LatLng | null>(null);
@@ -112,11 +74,8 @@ export function DriverTripPanel({
   const points = (request?.request_route_points ?? []).slice().sort((a, b) => a.sequence - b.sequence);
   const hasStops = points.some((p) => p.point_type === "stop");
   const actions = nextDriverActions(trip.status, hasStops, request?.is_round_trip ?? false);
-  const focusIdx = mapFocusIndex(trip.status, points, trip.current_stop_index ?? 0);
-  const pickup = points.find((p) => p.point_type === "pickup");
-  const drop = points.find((p) => p.point_type === "destination");
+  const focusIdx = trackFocusIndex(trip.status, points, trip.current_stop_index ?? 0);
   const isActive = !["completed", "cancelled", "breakdown"].includes(trip.status);
-  const statusLabel = t(`tripStatus.${trip.status}` as MessageKey);
 
   function handlePosition(pos: LatLng) {
     lastPos.current = pos;
@@ -138,153 +97,146 @@ export function DriverTripPanel({
     );
   }
 
+  const mapPoints = points.map((p) => ({
+    name: p.name,
+    ...(p.address != null ? { address: p.address } : {}),
+    latitude: p.latitude,
+    longitude: p.longitude,
+    point_type: p.point_type,
+  }));
+
   return (
-    <Panel
-      title={`${trip.reference} · ${request?.purpose ?? "Trip"}`}
-      {...(compact
-        ? {}
-        : { description: t("driver.panel.assigned", { when: formatDateTime(trip.created_at) }) })}
-      action={<StatusChip label={statusLabel} tone={TRIP_STATUS[trip.status]?.tone} />}
-    >
-      <div className="mb-3 trip-stat-grid">
-        <div className="trip-stat-card">
-          <Clock className="mb-1 size-3.5 text-muted-foreground" />
-          <p className="text-[11px] text-muted-foreground">{t("driver.panel.pickupTime")}</p>
-          <p className="font-medium leading-tight">{formatDateTime(request?.pickup_at)}</p>
-        </div>
-        <div className="trip-stat-card">
-          <p className="text-[11px] text-muted-foreground">{t("driver.panel.vehicle")}</p>
-          {trip.vehicle_id ? (
-            <Link
-              to="/fleet/$vehicleId"
-              params={{ vehicleId: trip.vehicle_id }}
-              className="font-medium hover:text-primary"
-            >
-              {trip.vehicles?.name ?? t("driver.panel.viewVehicle")}
-            </Link>
+    <div className={cn("plan-ride ride-detail ride-detail--driver", isActive && "ride-detail--driver-active")}>
+      <header className="plan-ride__top">
+        <Link to="/my-trips" className="plan-ride__back" aria-label={t("driver.detail.back")}>
+          <ArrowLeft className="size-5" />
+        </Link>
+        <h1 className="plan-ride__title">{t("driver.detail.assignment")}</h1>
+        <span className="plan-ride__top-spacer" aria-hidden />
+      </header>
+
+      <div className="ride-detail__ref">
+        <span className="ride-detail__ref-code">{trip.reference}</span>
+        <LookupChip group="trip_status" value={trip.status} pill />
+      </div>
+
+      <div className="plan-ride__pills">
+        {request?.pickup_at ? (
+          <span className="plan-ride__pill">
+            <span className="truncate">{formatPickupLabel(request.pickup_at)}</span>
+          </span>
+        ) : null}
+        <span className="plan-ride__pill">
+          <span className="truncate">
+            {request?.passenger_count ?? 0}{" "}
+            {(request?.passenger_count ?? 0) === 1 ? "passenger" : "passengers"}
+          </span>
+        </span>
+        {trip.vehicles?.name ? (
+          <span className="plan-ride__pill">
+            <span className="truncate">{trip.vehicles.name}</span>
+          </span>
+        ) : null}
+      </div>
+
+      <div className="plan-ride__route-wrap">
+        <div className="plan-ride__route">
+          {points.length === 0 ? (
+            <p className="ride-detail__muted p-3">No route points.</p>
           ) : (
-            <p className="font-medium">{trip.vehicles?.name ?? "—"}</p>
+            points.map((p, i) => (
+              <div key={`${p.point_type}-${i}`} className="plan-ride__stop">
+                <span className={cn("plan-ride__dot", `plan-ride__dot--${pointTone(p.point_type)}`)} />
+                <span className="min-w-0 flex-1">
+                  <span className="plan-ride__stop-name">{p.name}</span>
+                  {p.address ? <span className="plan-ride__stop-addr">{p.address}</span> : null}
+                </span>
+              </div>
+            ))
           )}
-          <p className="text-[11px] text-muted-foreground">{trip.vehicles?.registration_number}</p>
-        </div>
-        <div className="trip-stat-card">
-          <p className="text-[11px] text-muted-foreground">{t("driver.panel.pickup")}</p>
-          <p className="font-medium leading-tight">{pickup?.name ?? "—"}</p>
-        </div>
-        <div className="trip-stat-card">
-          <p className="text-[11px] text-muted-foreground">{t("driver.panel.drop")}</p>
-          <p className="font-medium leading-tight">{drop?.name ?? "—"}</p>
         </div>
       </div>
 
-      <div className={compact ? "space-y-3" : "detail-split"}>
-        <div>
-          <p className="mb-1.5 text-[11px] text-muted-foreground">
-            {t("driver.panel.passengers", {
-              reg: trip.vehicles?.registration_number ?? "",
-              count: request?.passenger_count ?? 0,
-            })}
-          </p>
+      {request?.purpose ? (
+        <div className="ride-detail__purpose">
+          <p className="ride-detail__purpose-label">Purpose</p>
+          <p className="ride-detail__purpose-text">{request.purpose}</p>
+        </div>
+      ) : null}
+
+      {mapPoints.length > 0 ? (
+        <section className="ride-detail__map">
           <LiveTripMap
-            points={points.map((p) => ({
-              name: p.name,
-              ...(p.address != null ? { address: p.address } : {}),
-              latitude: p.latitude,
-              longitude: p.longitude,
-              point_type: p.point_type,
-            }))}
+            mapOnly
+            className="ride-detail__map-el"
+            points={mapPoints}
             focusIndex={focusIdx}
             live={isActive}
             {...(isActive ? { onPosition: handlePosition } : {})}
             markerLabel="Your location"
-            className={compact ? "h-56 w-full sm:h-64 lg:h-72" : "h-56 w-full sm:h-72 lg:h-80"}
           />
-          {points.length > 0 && (
-            <div className="mt-4">
-              <RouteTimeline
-                points={points.map((p) => ({
-                  name: p.name,
-                  ...(p.address != null ? { address: p.address } : {}),
-                  point_type: p.point_type,
-                  ...(p.expected_at !== undefined ? { expected_at: p.expected_at } : {}),
-                }))}
-                {...(trip.current_stop_index != null
-                  ? { activeIndex: trip.current_stop_index }
-                  : {})}
-              />
-            </div>
-          )}
+        </section>
+      ) : null}
+
+      <section className="ride-detail__card">
+        <p className="ride-detail__card-title">{t("driver.panel.vehicle")}</p>
+        <div className="ride-detail__assign-row">
+          <span className="ride-detail__assign-icon">
+            <Car className="size-4" />
+          </span>
+          <span className="min-w-0">
+            {trip.vehicle_id ? (
+              <Link
+                to="/fleet/$vehicleId"
+                params={{ vehicleId: trip.vehicle_id }}
+                className="ride-detail__assign-name ride-detail__link"
+              >
+                {trip.vehicles?.name ?? t("driver.panel.viewVehicle")}
+              </Link>
+            ) : (
+              <span className="ride-detail__assign-name">{trip.vehicles?.name ?? "—"}</span>
+            )}
+            <span className="ride-detail__assign-sub">
+              {trip.vehicles?.registration_number ?? "—"}
+              {request?.passenger_count != null
+                ? ` · ${request.passenger_count} pax`
+                : ""}
+            </span>
+          </span>
         </div>
+        <p className="ride-detail__assign-meta">
+          {t("driver.panel.assigned", { when: formatDateTime(trip.created_at) })}
+        </p>
+      </section>
 
-        <div className="space-y-3">
-          {isActive && (
-            <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <p className="mb-2 text-xs font-medium text-muted-foreground">{t("driver.panel.progress")}</p>
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                {actions.map((a) => {
-                  const copy = actionCopy(t, a.action, trip.status, hasStops);
-                  return (
-                    <Button
-                      key={a.action}
-                      variant={a.primary ? "default" : "outline"}
-                      className={compact ? "min-h-9 w-full sm:w-auto" : "min-h-11 w-full sm:w-auto"}
-                      disabled={advance.isPending}
-                      tooltip={copy.hint}
-                      onClick={() => runAction(a.action, copy.label)}
-                    >
-                      {copy.label}
-                    </Button>
-                  );
-                })}
-                {actions.length === 0 && (
-                  <p className="text-xs text-muted-foreground">{t("driver.panel.noActions")}</p>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="rounded-lg border border-dashed border-border p-3">
-            <p className="text-xs font-medium">{t("driver.panel.reportTitle")}</p>
-            <Textarea
-              rows={2}
-              className="mt-2"
-              placeholder={t("driver.panel.reportPlaceholder")}
-              value={issue}
-              onChange={(e) => onIssueChange(e.target.value)}
-            />
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-2 min-h-11 w-full sm:w-auto"
-              disabled={report.isPending || !trip.vehicle_id}
-              tooltip={t("driver.panel.reportTip")}
-              onClick={() => {
-                if (!trip.vehicle_id) return;
-                report.mutate(
-                  {
-                    vehicleId: trip.vehicle_id,
-                    driverId,
-                    tripId: trip.id,
-                    reason: "mechanical",
-                    description: issue,
-                    severity: "high",
-                    actorId: userId,
-                  },
-                  {
-                    onSuccess: () => {
-                      toast.success(t("driver.panel.reported"));
-                      onIssueChange("");
-                    },
-                    onError: (e) => toast.error(e.message),
-                  },
-                );
-              }}
-            >
-              {t("driver.panel.sendReport")}
-            </Button>
+      {isActive ? (
+        <div className="ride-detail__driver-actions">
+          <p className="ride-detail__card-title">{t("driver.panel.progress")}</p>
+          <div className="ride-detail__action-stack">
+            {actions.map((a) => {
+              const copy = actionCopy(t, a.action, trip.status, hasStops);
+              return (
+                <Button
+                  key={a.action}
+                  variant={a.primary ? "default" : "outline"}
+                  className={cn(
+                    "ride-detail__action-btn",
+                    a.primary && "ride-detail__action-btn--primary",
+                  )}
+                  disabled={advance.isPending}
+                  tooltip={copy.hint}
+                  onClick={() => runAction(a.action, copy.label)}
+                >
+                  {copy.label}
+                </Button>
+              );
+            })}
+            {actions.length === 0 ? (
+              <p className="ride-detail__muted">{t("driver.panel.noActions")}</p>
+            ) : null}
           </div>
         </div>
-      </div>
-    </Panel>
+      ) : null}
+    </div>
   );
 }

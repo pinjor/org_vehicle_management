@@ -32,6 +32,10 @@ export type RequestRow = {
   is_round_trip?: boolean;
   assigned_vehicle_id?: string | null;
   assigned_driver_id?: string | null;
+  assigned_at?: string | null;
+  requires_ac?: boolean;
+  cost_center?: string | null;
+  special_requirements?: string | null;
   departments?: { name?: string; code?: string } | null;
   vehicles?: {
     id?: string;
@@ -125,6 +129,10 @@ export type VehicleRecord = {
   last_repair_summary: string | null;
   operational_status: string;
   notes: string | null;
+  primary_driver_id: string | null;
+  primary_driver_name?: string | null;
+  primary_driver_code?: string | null;
+  primary_driver_phone?: string | null;
 };
 
 export type DriverRecord = {
@@ -147,6 +155,11 @@ export type DriverRecord = {
   address: string | null;
   date_of_joining: string | null;
   rating: number;
+  primary_vehicle_id?: string | null;
+  primary_vehicle_fleet?: string | null;
+  primary_vehicle_name?: string | null;
+  primary_vehicle_reg?: string | null;
+  primary_vehicle_category?: string | null;
 };
 
 export type TripRecord = {
@@ -221,16 +234,7 @@ export function useUpdateVehicle() {
 export function useCreateVehicle() {
   const invalidate = useInvalidateFleet();
   return useMutation({
-    mutationFn: (input: {
-      registration_number: string;
-      fleet_number: string;
-      name: string;
-      category: string;
-      brand?: string;
-      model?: string;
-      seat_capacity: number;
-      branch?: string;
-    }) => apiPost<unknown>("/api/vehicles", input),
+    mutationFn: (input: Record<string, unknown>) => apiPost<unknown>("/api/vehicles", input),
     onSuccess: invalidate,
   });
 }
@@ -247,16 +251,7 @@ export function useUpdateDriver() {
 export function useCreateDriver() {
   const invalidate = useInvalidateFleet();
   return useMutation({
-    mutationFn: (input: {
-      full_name: string;
-      driver_code: string;
-      phone: string;
-      license_number: string;
-      license_expiry?: string | null;
-      shift?: string;
-      allowed_categories?: string[];
-      experience_years?: number;
-    }) => apiPost<unknown>("/api/drivers", input),
+    mutationFn: (input: Record<string, unknown>) => apiPost<unknown>("/api/drivers", input),
     onSuccess: invalidate,
   });
 }
@@ -265,6 +260,14 @@ export function useMarkNotificationRead() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiPatch(`/api/notifications/${id}/read`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+export function useMarkAllNotificationsRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiPost("/api/notifications/read-all"),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["notifications"] }),
   });
 }
@@ -495,7 +498,7 @@ export function useReviewUnavailability() {
     mutationFn: (input: {
       id: string;
       vehicleId: string;
-      decision: "approved_unavailable" | "sent_to_maintenance" | "rejected" | "info_requested" | "resolved";
+      decision: "approved_unavailable" | "sent_to_maintenance" | "rejected" | "resolved";
       note?: string;
       actorId: string;
     }) =>

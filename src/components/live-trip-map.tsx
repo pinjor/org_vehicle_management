@@ -1,11 +1,20 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MapPin, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { MapPoint } from "./trip-map";
+import {
+  createDotMarker,
+  fitLatLngs,
+  maplibregl,
+  markerColor,
+  mountMap,
+  ROUTE_COLOR,
+  toLngLat,
+  upsertRouteLine,
+  whenStyleReady,
+} from "@/lib/free-map";
 import { useI18n } from "@/lib/i18n";
-import { fetchOsrmRoute, osmTileLayer, pointsWithCoords, type LatLng } from "@/lib/osm";
-
-import "leaflet/dist/leaflet.css";
+import { fetchOsrmRoute, pointsWithCoords, type LatLng } from "@/lib/osm";
 
 function haversineM(a: LatLng, b: LatLng) {
   const toRad = (d: number) => (d * Math.PI) / 180;
@@ -19,6 +28,35 @@ function haversineM(a: LatLng, b: LatLng) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
+function setDashedTrail(map: maplibregl.Map, path: LatLng[]) {
+  const data = {
+    type: "Feature" as const,
+    properties: {},
+    geometry: {
+      type: "LineString" as const,
+      coordinates: path.map(([lat, lng]) => [lng, lat]),
+    },
+  };
+  const src = map.getSource("trail") as maplibregl.GeoJSONSource | undefined;
+  if (src) {
+    src.setData(data);
+    return;
+  }
+  map.addSource("trail", { type: "geojson", data });
+  map.addLayer({
+    id: "trail-line",
+    type: "line",
+    source: "trail",
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: {
+      "line-color": "#64748b",
+      "line-width": 3,
+      "line-opacity": 0.55,
+      "line-dasharray": [1.2, 1.6],
+    },
+  });
+}
+
 export function LiveTripMap({
   points,
   focusIndex = 0,
@@ -28,41 +66,60 @@ export function LiveTripMap({
   onPosition,
   className = "h-64 w-full",
   markerLabel = "Vehicle",
+  mapOnly = false,
 }: {
   points: MapPoint[];
   focusIndex?: number;
-  /** Watch device GPS (driver). */
   live?: boolean;
-  /** Shared position from server (employee / dispatch). */
   externalPosition?: LatLng | null;
-  /** Past pings for grey trail. */
   trail?: LatLng[];
-  /** Called when live GPS updates (driver ping). */
   onPosition?: (pos: LatLng) => void;
   className?: string;
   markerLabel?: string;
+  mapOnly?: boolean;
 }) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<import("leaflet").Map | null>(null);
-  const routeLayerRef = useRef<import("leaflet").Polyline | null>(null);
-  const trailLayerRef = useRef<import("leaflet").Polyline | null>(null);
-  const driverMarkerRef = useRef<import("leaflet").CircleMarker | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
+  const driverMarkerRef = useRef<maplibregl.Marker | null>(null);
   const lastRouteOriginRef = useRef<LatLng | null>(null);
   const lastRouteAtRef = useRef(0);
+  const hasRouteRef = useRef(false);
   const onPositionRef = useRef(onPosition);
   onPositionRef.current = onPosition;
 
+  const [ready, setReady] = useState(false);
   const [devicePos, setDevicePos] = useState<LatLng | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [navTick, setNavTick] = useState(0);
   const [navigating, setNavigating] = useState(false);
 
   const coords = pointsWithCoords(points);
+  const hasCoords = coords.length > 0;
   const focus = coords[Math.min(focusIndex, Math.max(0, coords.length - 1))];
   const pointsKey = points.map((p) => `${p.latitude},${p.longitude},${p.point_type}`).join("|");
   const driverPos = live ? devicePos : externalPosition;
   const remaining = coords.slice(Math.min(focusIndex, coords.length));
+
+  useEffect(() => {
+    if (!hasCoords) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const map = mountMap(el);
+    mapRef.current = map;
+    const cancelReady = whenStyleReady(map, () => setReady(true));
+    return () => {
+      cancelReady();
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+      driverMarkerRef.current?.remove();
+      driverMarkerRef.current = null;
+      map.remove();
+      mapRef.current = null;
+      setReady(false);
+    };
+  }, [hasCoords]);
 
   useEffect(() => {
     if (!live || typeof navigator === "undefined" || !navigator.geolocation) return;
@@ -79,103 +136,52 @@ export function LiveTripMap({
     return () => navigator.geolocation.clearWatch(id);
   }, [live, t]);
 
-  // Base map + waypoint markers (rebuild when route points change)
   useEffect(() => {
-    if (!containerRef.current || coords.length === 0) return;
-    let cancelled = false;
+    const map = mapRef.current;
+    if (!map || !ready || coords.length === 0) return;
 
-    void import("leaflet").then((L) => {
-      if (cancelled || !containerRef.current) return;
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = coords.map((p, i) =>
+      createDotMarker(markerColor(p.point_type), i === focusIndex)
+        .setLngLat([p.longitude, p.latitude])
+        .setPopup(
+          new maplibregl.Popup({ offset: 28, className: "fleet-map-popup" }).setHTML(
+            `<strong>${p.name}</strong>${p.address ? `<br/><span style="opacity:.75">${p.address}</span>` : ""}`,
+          ),
+        )
+        .addTo(map),
+    );
 
-      if (!mapRef.current) {
-        mapRef.current = L.map(containerRef.current, { zoomControl: true, attributionControl: true });
-        osmTileLayer(L).addTo(mapRef.current);
-      }
-
-      const map = mapRef.current;
-      map.eachLayer((layer) => {
-        if (layer instanceof L.CircleMarker || layer instanceof L.Marker) {
-          map.removeLayer(layer);
-        }
-      });
-      driverMarkerRef.current = null;
-
-      coords.forEach((p, i) => {
-        const isPickup = p.point_type === "pickup";
-        const isDest = p.point_type === "destination";
-        const color = isPickup ? "#16a34a" : isDest ? "#dc2626" : "#2563eb";
-        L.circleMarker([p.latitude, p.longitude], {
-          radius: i === focusIndex ? 10 : 8,
-          color: "#fff",
-          weight: 2,
-          fillColor: color,
-          fillOpacity: 1,
-        })
-          .bindPopup(`<strong>${p.name}</strong>${p.address ? `<br/>${p.address}` : ""}`)
-          .addTo(map);
-      });
-
-      const seed = coords.map((p) => [p.latitude, p.longitude] as LatLng);
-      map.fitBounds(L.latLngBounds(seed), { padding: [28, 28] });
-      requestAnimationFrame(() => map.invalidateSize());
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [pointsKey, focusIndex]);
+    fitLatLngs(
+      map,
+      coords.map((p) => [p.latitude, p.longitude]),
+    );
+  }, [pointsKey, focusIndex, ready]);
 
   useEffect(() => {
-    return () => {
-      mapRef.current?.remove();
-      mapRef.current = null;
-    };
-  }, []);
+    const map = mapRef.current;
+    if (!map || !ready || !driverPos) return;
+    if (driverMarkerRef.current) {
+      driverMarkerRef.current.setLngLat(toLngLat(driverPos));
+    } else {
+      driverMarkerRef.current = createDotMarker("#0284c7", true)
+        .setLngLat(toLngLat(driverPos))
+        .setPopup(new maplibregl.Popup({ offset: 28 }).setText(markerLabel))
+        .addTo(map);
+    }
+  }, [driverPos, markerLabel, ready]);
 
-  // Live / shared driver marker
   useEffect(() => {
-    if (!mapRef.current || !driverPos) return;
-    void import("leaflet").then((L) => {
-      if (!mapRef.current) return;
-      if (driverMarkerRef.current) {
-        driverMarkerRef.current.setLatLng(driverPos);
-      } else {
-        driverMarkerRef.current = L.circleMarker(driverPos, {
-          radius: 9,
-          color: "#fff",
-          weight: 3,
-          fillColor: "#0ea5e9",
-          fillOpacity: 1,
-        })
-          .bindPopup(markerLabel)
-          .addTo(mapRef.current);
-      }
-    });
-  }, [driverPos, markerLabel]);
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    if (trail.length >= 2) {
+      setDashedTrail(map, trail);
+    }
+  }, [trail.map((p) => p.join(",")).join("|"), ready]);
 
-  // Trail polyline
   useEffect(() => {
-    if (!mapRef.current) return;
-    void import("leaflet").then((L) => {
-      if (!mapRef.current) return;
-      if (trailLayerRef.current) {
-        mapRef.current.removeLayer(trailLayerRef.current);
-        trailLayerRef.current = null;
-      }
-      if (trail.length >= 2) {
-        trailLayerRef.current = L.polyline(trail, {
-          color: "#94a3b8",
-          weight: 3,
-          opacity: 0.55,
-          dashArray: "4 6",
-        }).addTo(mapRef.current);
-      }
-    });
-  }, [trail.map((p) => p.join(",")).join("|")]);
-
-  // Active pathway: driver → remaining waypoints (debounced)
-  useEffect(() => {
-    if (!mapRef.current || remaining.length === 0) return;
+    const map = mapRef.current;
+    if (!map || !ready || remaining.length === 0) return;
     let cancelled = false;
 
     const origin = driverPos;
@@ -188,49 +194,35 @@ export function LiveTripMap({
     const movedFar = !last || !origin || haversineM(last, origin) > 80;
     const timedOut = now - lastRouteAtRef.current > 18_000;
     const forceNav = navTick > 0;
-    const shouldFetch = forceNav || !routeLayerRef.current || movedFar || timedOut || !origin;
-
+    const shouldFetch = forceNav || !hasRouteRef.current || movedFar || timedOut || !origin;
     if (!shouldFetch && origin) return;
 
     setNavigating(true);
-    void (async () => {
-      const route = await fetchOsrmRoute(waypoints);
+    void fetchOsrmRoute(waypoints).then((route) => {
       if (cancelled || !mapRef.current) {
         setNavigating(false);
         return;
       }
-      const L = await import("leaflet");
-      if (routeLayerRef.current) {
-        mapRef.current.removeLayer(routeLayerRef.current);
-      }
-      routeLayerRef.current = L.polyline(route, {
-        color: "hsl(221 83% 53%)",
-        weight: 5,
-        opacity: 0.85,
-      }).addTo(mapRef.current);
+      const path = route.length >= 2 ? route : waypoints;
+      upsertRouteLine(mapRef.current, "live-route", path, { color: ROUTE_COLOR, width: 5 });
+      hasRouteRef.current = path.length >= 2;
       if (origin) {
         lastRouteOriginRef.current = origin;
         lastRouteAtRef.current = Date.now();
       }
-      const bounds = L.latLngBounds(route.length ? route : waypoints);
-      mapRef.current.fitBounds(bounds, { padding: [28, 28], maxZoom: 16 });
+      fitLatLngs(mapRef.current, path, 48, 15);
       setNavigating(false);
-    })();
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [
-    driverPos?.[0],
-    driverPos?.[1],
-    focusIndex,
-    pointsKey,
-    navTick,
-  ]);
+  }, [driverPos?.[0], driverPos?.[1], focusIndex, pointsKey, navTick, ready]);
 
   const handleNavigate = useCallback(() => {
     lastRouteAtRef.current = 0;
     lastRouteOriginRef.current = null;
+    hasRouteRef.current = false;
     setNavTick((n) => n + 1);
 
     if (live && typeof navigator !== "undefined" && navigator.geolocation) {
@@ -246,18 +238,12 @@ export function LiveTripMap({
       );
     }
 
-    void import("leaflet").then((L) => {
-      const map = mapRef.current;
-      if (!map || !focus) return;
-      const targets: LatLng[] = [];
-      if (driverPos) targets.push(driverPos);
-      targets.push([focus.latitude, focus.longitude]);
-      if (targets.length === 1) {
-        map.setView(targets[0]!, 15, { animate: true });
-      } else {
-        map.fitBounds(L.latLngBounds(targets), { padding: [40, 40], maxZoom: 16 });
-      }
-    });
+    const map = mapRef.current;
+    if (!map || !focus) return;
+    const targets: LatLng[] = [];
+    if (driverPos) targets.push(driverPos);
+    targets.push([focus.latitude, focus.longitude]);
+    fitLatLngs(map, targets, 48, 15);
   }, [live, focus, driverPos, t]);
 
   if (!coords.length) {
@@ -274,23 +260,35 @@ export function LiveTripMap({
 
   const dest = focus ?? coords[coords.length - 1]!;
 
+  const mapPane = (
+    <div
+      className={
+        mapOnly
+          ? `relative overflow-hidden bg-[#e8f0e9] ${className}`
+          : `relative overflow-hidden rounded-xl border border-border/80 bg-[#e8f0e9] shadow-sm ${className}`
+      }
+    >
+      <div ref={containerRef} className="fleet-map h-full w-full" />
+      {(live || externalPosition) && (
+        <div className="absolute left-2 top-2 z-10 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-full bg-background/95 px-2.5 py-1 text-[10px] font-medium shadow-md ring-1 ring-border/60 backdrop-blur">
+          <span className="relative flex size-2 shrink-0">
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-coral/70 opacity-75" />
+            <span className="relative inline-flex size-2 rounded-full bg-primary" />
+          </span>
+          <span className="truncate">{live ? t("map.liveGps") : t("map.liveTracking")}</span>
+        </div>
+      )}
+    </div>
+  );
+
+  if (mapOnly) return mapPane;
+
   return (
-    <div className="space-y-2">
-      <div className={`relative overflow-hidden rounded-lg border border-border ${className}`}>
-        <div ref={containerRef} className="h-full w-full min-h-[16rem]" />
-        {(live || externalPosition) && (
-          <div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-full bg-background/90 px-2.5 py-1 text-[10px] font-medium shadow-sm backdrop-blur">
-            <span className="relative flex size-2">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-coral/70 opacity-75" />
-              <span className="relative inline-flex size-2 rounded-full bg-primary" />
-            </span>
-            {live ? t("map.liveGps") : t("map.liveTracking")}
-          </div>
-        )}
-      </div>
-      {geoError && <p className="text-xs text-amber-600">{geoError}</p>}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
+    <div className="min-w-0 space-y-2">
+      {mapPane}
+      {geoError && <p className="break-words text-xs text-amber-600">{geoError}</p>}
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <p className="min-w-0 flex-1 break-words text-xs text-muted-foreground">
           {t("map.next")} <span className="font-medium text-foreground">{dest.name}</span>
           {dest.address ? ` · ${dest.address}` : ""}
         </p>

@@ -31,7 +31,13 @@ import {
   serviceTone,
   TRIP_STATUS,
 } from "@/lib/fleet";
-import { useUnavailabilityRequests, useUpdateVehicle, useVehicle, useVehicleTrips } from "@/lib/queries";
+import {
+  useDrivers,
+  useUnavailabilityRequests,
+  useUpdateVehicle,
+  useVehicle,
+  useVehicleTrips,
+} from "@/lib/queries";
 
 export const Route = createFileRoute("/fleet/$vehicleId")({
   head: ({ params }) => ({
@@ -50,6 +56,7 @@ function VehicleProfilePage() {
   const { data: vehicle, isLoading } = useVehicle(vehicleId);
   const { data: trips } = useVehicleTrips(vehicleId);
   const { data: maintenance } = useUnavailabilityRequests();
+  const { data: drivers } = useDrivers();
   const update = useUpdateVehicle();
   const [form, setForm] = useState<Record<string, string | number | boolean>>({});
 
@@ -89,6 +96,7 @@ function VehicleProfilePage() {
       last_repair_summary: vehicle.last_repair_summary ?? "",
       operational_status: vehicle.operational_status,
       notes: vehicle.notes ?? "",
+      primary_driver_id: vehicle.primary_driver_id ?? "",
     });
   }, [vehicle]);
 
@@ -156,6 +164,7 @@ function VehicleProfilePage() {
           last_repair_summary: String(form.last_repair_summary) || null,
           operational_status: String(form.operational_status),
           notes: String(form.notes) || null,
+          primary_driver_id: String(form.primary_driver_id) || null,
         },
       });
       toast.success("Vehicle profile saved");
@@ -245,11 +254,30 @@ function VehicleProfilePage() {
                 <LookupChip group="vehicle_status" value={vehicle.operational_status} dot={false} />
               </dd>
             </div>
+            <div className="profile-overview-cell profile-overview-cell--span">
+              <dt>Primary driver</dt>
+              <dd>
+                {vehicle.primary_driver_id && vehicle.primary_driver_name ? (
+                  <EntityProfileLink
+                    to="/drivers/$driverId"
+                    params={{ driverId: vehicle.primary_driver_id }}
+                    label={vehicle.primary_driver_name}
+                    hint={
+                      [vehicle.primary_driver_code, vehicle.primary_driver_phone]
+                        .filter(Boolean)
+                        .join(" · ") || undefined
+                    }
+                  />
+                ) : (
+                  "— Not linked —"
+                )}
+              </dd>
+            </div>
           </dl>
         </Panel>
 
         <form onSubmit={save} className="profile-page__form profile-page__form--split">
-          <Panel title="Identification" compact bodyClassName="profile-panel-body">
+          <Panel title="Vehicle" compact bodyClassName="profile-panel-body">
             <div className="profile-form-fields">
               <Field label="Fleet number">
                 <input className="app-field-input" value={String(form.fleet_number ?? "")} onChange={(e) => set("fleet_number", e.target.value)} disabled={!isDispatcher} />
@@ -260,11 +288,29 @@ function VehicleProfilePage() {
               <Field label="Display name" className="profile-field-span">
                 <input className="app-field-input" value={String(form.name ?? "")} onChange={(e) => set("name", e.target.value)} disabled={!isDispatcher} />
               </Field>
-              <Field label="Type">
+              <Field label="Category">
                 <select className="app-field-select" value={String(form.category ?? "")} onChange={(e) => set("category", e.target.value)} disabled={!isDispatcher}>
                   {categoryOptions.map((c) => (
                     <option key={c.value_key} value={c.value_key}>
                       {c.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Primary driver" className="profile-field-span" hint="Change anytime — used as assign suggestion">
+                <select
+                  className="app-field-select"
+                  value={String(form.primary_driver_id ?? "")}
+                  onChange={(e) => set("primary_driver_id", e.target.value)}
+                  disabled={!isDispatcher}
+                >
+                  <option value="">— Not linked —</option>
+                  {(drivers ?? []).map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.driver_code} · {d.full_name}
+                      {d.primary_vehicle_id && d.primary_vehicle_id !== vehicleId
+                        ? " (reassign from other vehicle)"
+                        : ""}
                     </option>
                   ))}
                 </select>
@@ -332,7 +378,7 @@ function VehicleProfilePage() {
             </div>
           </Panel>
 
-          <Panel title="Service & repair" compact bodyClassName="profile-panel-body">
+          <Panel title="Service & operations" compact bodyClassName="profile-panel-body">
             <div className="profile-form-fields">
               <Field label="Odometer (km)">
                 <input className="app-field-input" type="number" value={String(form.odometer_km ?? "")} onChange={(e) => set("odometer_km", e.target.value)} disabled={!isDispatcher} />
@@ -352,20 +398,6 @@ function VehicleProfilePage() {
               <Field label="Repair summary">
                 <input className="app-field-input" value={String(form.last_repair_summary ?? "")} onChange={(e) => set("last_repair_summary", e.target.value)} disabled={!isDispatcher} />
               </Field>
-            </div>
-            <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
-              <div
-                className={`h-full transition-all ${kmLeft < 0 ? "bg-destructive" : kmLeft < 1000 ? "bg-warning" : "bg-primary"}`}
-                style={{ width: `${Math.min(100, Math.max(0, ((interval - kmLeft) / interval) * 100))}%` }}
-              />
-            </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {odo.toLocaleString()} km · next at {(lastSvcKm + interval).toLocaleString()} km
-            </p>
-          </Panel>
-
-          <Panel title="Operations" className="profile-form-span" compact bodyClassName="profile-panel-body">
-            <div className="profile-form-fields profile-form-fields--3">
               <Field label="Branch">
                 <input className="app-field-input" value={String(form.branch ?? "")} onChange={(e) => set("branch", e.target.value)} disabled={!isDispatcher} />
               </Field>
@@ -391,6 +423,15 @@ function VehicleProfilePage() {
                 <Textarea value={String(form.notes ?? "")} onChange={(e) => set("notes", e.target.value)} rows={2} disabled={!isDispatcher} />
               </Field>
             </div>
+            <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
+              <div
+                className={`h-full transition-all ${kmLeft < 0 ? "bg-destructive" : kmLeft < 1000 ? "bg-warning" : "bg-primary"}`}
+                style={{ width: `${Math.min(100, Math.max(0, ((interval - kmLeft) / interval) * 100))}%` }}
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {odo.toLocaleString()} km · next at {(lastSvcKm + interval).toLocaleString()} km
+            </p>
           </Panel>
 
           {isDispatcher && (
