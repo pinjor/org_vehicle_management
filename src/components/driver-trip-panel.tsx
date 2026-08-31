@@ -36,7 +36,10 @@ type DriverTrip = {
     pickup_at?: string;
     passenger_count?: number;
     is_round_trip?: boolean;
+    requester_name?: string | null;
+    requester_phone?: string | null;
     request_route_points?: TripPoint[];
+    request_passengers?: { id?: string; full_name: string; phone?: string | null; is_primary?: boolean }[];
   } | null;
 };
 
@@ -76,6 +79,20 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
   const actions = nextDriverActions(trip.status, hasStops, request?.is_round_trip ?? false);
   const focusIdx = trackFocusIndex(trip.status, points, trip.current_stop_index ?? 0);
   const isActive = !["completed", "cancelled", "breakdown"].includes(trip.status);
+
+  const namedPassengers = (request?.request_passengers ?? []).filter((p) => p.full_name?.trim());
+  const passengers =
+    namedPassengers.length > 0
+      ? namedPassengers
+      : request?.requester_name
+        ? [
+            {
+              full_name: request.requester_name,
+              phone: request.requester_phone ?? null,
+              is_primary: true,
+            },
+          ]
+        : [];
 
   function handlePosition(pos: LatLng) {
     lastPos.current = pos;
@@ -162,6 +179,28 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
           <p className="ride-detail__purpose-label">Purpose</p>
           <p className="ride-detail__purpose-text">{request.purpose}</p>
         </div>
+      ) : null}
+
+      {passengers.length > 0 ? (
+        <section className="ride-detail__card">
+          <p className="ride-detail__card-title">
+            Passengers · {request?.passenger_count ?? passengers.length}
+          </p>
+          <ul className="ride-detail__pax-list">
+            {passengers.map((p, i) => (
+              <li key={p.id ?? `${p.full_name}-${i}`} className="ride-detail__pax-row">
+                <span className="ride-detail__assign-name">{p.full_name}</span>
+                {p.phone ? (
+                  <a href={`tel:${p.phone}`} className="ride-detail__assign-sub ride-detail__who-phone">
+                    {p.phone}
+                  </a>
+                ) : (
+                  <span className="ride-detail__assign-sub">No phone</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       {mapPoints.length > 0 ? (

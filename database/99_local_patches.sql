@@ -394,3 +394,13 @@ update public.drivers d
 set allowed_categories = array[v.category]
 from public.vehicles v
 where v.primary_driver_id = d.id;
+
+-- Requester as primary passenger when none stored (mobile driver assignment)
+insert into public.request_passengers (request_id, full_name, phone, passenger_type, is_primary)
+select vr.id, vr.requester_name, nullif(trim(vr.requester_phone), ''), 'employee', true
+from public.vehicle_requests vr
+where vr.requester_name is not null
+  and trim(vr.requester_name) <> ''
+  and not exists (
+    select 1 from public.request_passengers rp where rp.request_id = vr.id
+  );

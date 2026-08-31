@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, User } from "lucide-react";
+import { User } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { LookupChip } from "@/components/lookup-chip";
@@ -178,14 +178,9 @@ function DriverProfilePage() {
       title={driver.full_name}
       subtitle={`${driver.driver_code} · ${formatBdPhone(driver.phone)}`}
       actions={<LookupChip group="driver_status" value={driver.current_status} />}
+      backTo="/drivers"
+      backLabel="Back to driver roster"
     >
-      <Link
-        to="/drivers"
-        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" /> Driver roster
-      </Link>
-
       {!isDispatcher && (
         <p className="mb-3 rounded-lg border border-border bg-surface-2/60 px-3 py-2 text-sm text-muted-foreground">
           View only. Contact dispatch to update this driver record.

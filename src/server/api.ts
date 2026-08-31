@@ -449,12 +449,23 @@ app.post("/api/requests", async (c) => {
     );
   }
   const passengers = (input.passengers as { full_name: string; phone: string; passenger_type: string }[]) ?? [];
-  for (let i = 0; i < passengers.length; i++) {
-    const p = passengers[i]!;
-    await query(
-      `insert into request_passengers (request_id, full_name, phone, passenger_type, is_primary) values ($1,$2,$3,$4,$5)`,
-      [data.id, p.full_name, p.phone, p.passenger_type, i === 0],
-    );
+  if (passengers.length > 0) {
+    for (let i = 0; i < passengers.length; i++) {
+      const p = passengers[i]!;
+      await query(
+        `insert into request_passengers (request_id, full_name, phone, passenger_type, is_primary) values ($1,$2,$3,$4,$5)`,
+        [data.id, p.full_name, p.phone, p.passenger_type, i === 0],
+      );
+    }
+  } else {
+    // Always store requester as primary passenger so driver/admin can see contact on mobile
+    const name = String(input.requesterName ?? "").trim();
+    if (name) {
+      await query(
+        `insert into request_passengers (request_id, full_name, phone, passenger_type, is_primary) values ($1,$2,$3,'employee',true)`,
+        [data.id, name, String(input.requesterPhone ?? "").trim() || null],
+      );
+    }
   }
   await query(
     `insert into notifications (audience_role, category, title, body, link) values ($1,'request',$2,$3,'/dispatch')`,

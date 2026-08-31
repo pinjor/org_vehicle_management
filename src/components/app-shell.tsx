@@ -1,6 +1,7 @@
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  ArrowLeft,
   Bell,
   Briefcase,
   CalendarClock,
@@ -219,6 +220,9 @@ export function AppShell({
   subtitle,
   actions,
   fillViewport,
+  /** Show header back control. Prefer browser history; fall back to this path. */
+  backTo,
+  backLabel = "Back",
   children,
 }: {
   title: string;
@@ -226,11 +230,25 @@ export function AppShell({
   actions?: ReactNode;
   /** Lock main content to viewport height on lg+ — inner panels scroll instead of the page. */
   fillViewport?: boolean;
+  backTo?:
+    | "/dashboard"
+    | "/requests"
+    | "/drivers"
+    | "/fleet"
+    | "/admin/employees"
+    | "/my-trips"
+    | "/trips"
+    | "/dispatch"
+    | "/admin/users"
+    | "/admin/settings"
+    | "/maintenance";
+  backLabel?: string;
   children: ReactNode;
 }) {
   const { session, loading, profile, roles, isDispatcher, isDriver, isAdmin, isEmployee, signOut, user, driverId } = useAuth();
   const { t, isDriverPortal } = useI18n();
   const navigate = useNavigate();
+  const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: notifications } = useNotifications(user?.id);
   const markRead = useMarkNotificationRead();
@@ -288,7 +306,9 @@ export function AppShell({
 
   const showHeaderRequests = isDispatcher;
   const sidebarItems = showHeaderRequests
-    ? items.filter((n) => n.to !== "/requests" && n.to !== "/requests/new")
+    ? items.filter(
+        (n) => n.to !== "/requests" && n.to !== "/requests/new" && n.to !== "/profile",
+      )
     : items.filter((n) => !(isEmployee && !isDispatcher && n.to === "/requests/new"));
 
   const bottomKeys = useMemo(
@@ -314,6 +334,9 @@ export function AppShell({
   /** Mobile portal (employee / driver): bottom nav only — no hamburger / sheet. Desktop keeps sidebar. */
   const hideMobileSidebar = (isEmployee || isDriver) && !isDispatcher && !isAdmin;
   const employeeRideChrome = isEmployee && !isDispatcher && !isAdmin;
+  const hideMobileShellHeader =
+    pathname === "/requests/new" ||
+    (employeeRideChrome && (pathname === "/dashboard" || pathname === "/"));
 
   if (loading) return <WorkspaceSkeleton />;
   if (!session) return null;
@@ -325,6 +348,7 @@ export function AppShell({
         "flex min-h-screen bg-background",
         hideMobileSidebar && "employee-portal",
         employeeRideChrome && "employee-portal--ride",
+        hideMobileShellHeader && "app-shell--no-mobile-header",
       )}
     >
       {isDispatcher && <AdminRequestAlert />}
@@ -398,16 +422,34 @@ export function AppShell({
                 : "flex flex-wrap justify-between gap-y-2 gap-x-3",
           )}
         >
-          {employeeRideChrome ? (
-            <p className="ride-brand-title min-w-0 truncate">FleetOps</p>
-          ) : (
+          {employeeRideChrome ? null : (
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
+              {backTo ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="size-8 shrink-0"
+                  aria-label={backLabel}
+                  tooltip={backLabel}
+                  tooltipSide="bottom"
+                  onClick={() => {
+                    if (typeof window !== "undefined" && window.history.length > 1) {
+                      router.history.back();
+                      return;
+                    }
+                    void navigate({ to: backTo });
+                  }}
+                >
+                  <ArrowLeft className="size-4" />
+                </Button>
+              ) : null}
               {!hideMobileSidebar && (
                 <Button
                   type="button"
                   variant="outline"
                   size="icon"
-                  className="size-8 shrink-0 lg:hidden"
+                  className={cn("size-8 shrink-0 lg:hidden", backTo && "hidden")}
                   aria-label="Open menu"
                   tooltip="Open navigation menu"
                   onClick={() => setMenuOpen(true)}
@@ -626,17 +668,19 @@ export function AppShell({
                       <LanguageToggle className="w-full justify-stretch [&_button]:flex-1" />
                     </div>
                   )}
-                  <Link
-                    to="/profile"
-                    onClick={() => setAccountOpen(false)}
-                    className={cn(
-                      "flex min-h-9 items-center gap-2 rounded-md px-2.5 text-sm transition-colors hover:bg-accent",
-                      pathname === "/profile" && "bg-primary/8 font-semibold text-primary",
-                    )}
-                  >
-                    <User className="size-4 shrink-0 text-muted-foreground" />
-                    {isDriverPortal ? t("shell.myProfile") : "My profile"}
-                  </Link>
+                  {!isAdmin && (
+                    <Link
+                      to="/profile"
+                      onClick={() => setAccountOpen(false)}
+                      className={cn(
+                        "flex min-h-9 items-center gap-2 rounded-md px-2.5 text-sm transition-colors hover:bg-accent",
+                        pathname === "/profile" && "bg-primary/8 font-semibold text-primary",
+                      )}
+                    >
+                      <User className="size-4 shrink-0 text-muted-foreground" />
+                      {isDriverPortal ? t("shell.myProfile") : "My profile"}
+                    </Link>
+                  )}
                   <button
                     type="button"
                     onClick={() => {

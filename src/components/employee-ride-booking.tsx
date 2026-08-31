@@ -7,7 +7,6 @@ import {
   LocateFixed,
   MapPin,
   Plus,
-  Star,
   Users,
   X,
 } from "lucide-react";
@@ -121,8 +120,6 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
   const [busy, setBusy] = useState(false);
   const [dropSeeded, setDropSeeded] = useState(false);
   const [locating, setLocating] = useState(false);
-  const [savedFlash, setSavedFlash] = useState(false);
-  const suggestRef = useRef<HTMLElement>(null);
 
   const savedLocations = (locations.data ?? []) as SavedLocation[];
 
@@ -250,16 +247,6 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
       return next;
     });
     setFilter("");
-  }
-
-  function showSavedPlaces() {
-    setFilter("");
-    setFocus((f) => f ?? "pickup");
-    setSavedFlash(true);
-    window.setTimeout(() => setSavedFlash(false), 900);
-    requestAnimationFrame(() => {
-      suggestRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    });
   }
 
   function detectPickupLocation() {
@@ -424,163 +411,173 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
         <span className="plan-ride__top-spacer" aria-hidden />
       </header>
 
-      <div className="plan-ride__pills">
-        <button type="button" className="plan-ride__pill" onClick={() => setTimeOpen(true)}>
-          <Clock className="size-3.5 shrink-0" />
-          <span className="truncate">{formatPickupLabel(pickupAt)}</span>
-          <ChevronDown className="size-3.5 shrink-0 opacity-70" />
-        </button>
-        <button type="button" className="plan-ride__pill" onClick={() => setPaxOpen(true)}>
-          <Users className="size-3.5 shrink-0" />
-          <span className="truncate">
-            {passengerCount} {passengerCount === 1 ? "passenger" : "passengers"}
-          </span>
-          <ChevronDown className="size-3.5 shrink-0 opacity-70" />
-        </button>
-        <button type="button" className="plan-ride__pill" onClick={() => setTripOpen(true)}>
-          <span className="truncate">{tripLabel}</span>
-          <ChevronDown className="size-3.5 shrink-0 opacity-70" />
-        </button>
-      </div>
+      <div className="plan-ride__body">
+        <div className="plan-ride__form">
+          <div className="plan-ride__pills">
+            <button type="button" className="plan-ride__pill" onClick={() => setTimeOpen(true)}>
+              <Clock className="size-3.5 shrink-0" />
+              <span className="truncate">{formatPickupLabel(pickupAt)}</span>
+              <ChevronDown className="size-3.5 shrink-0 opacity-70" />
+            </button>
+            <button type="button" className="plan-ride__pill" onClick={() => setPaxOpen(true)}>
+              <Users className="size-3.5 shrink-0" />
+              <span className="truncate">
+                {passengerCount} {passengerCount === 1 ? "passenger" : "passengers"}
+              </span>
+              <ChevronDown className="size-3.5 shrink-0 opacity-70" />
+            </button>
+            <button type="button" className="plan-ride__pill" onClick={() => setTripOpen(true)}>
+              <span className="truncate">{tripLabel}</span>
+              <ChevronDown className="size-3.5 shrink-0 opacity-70" />
+            </button>
+          </div>
 
-      <div className="plan-ride__route-wrap">
-        <div className="plan-ride__route">
-          <PlaceField
-            tone="pickup"
-            active={focus === "pickup"}
-            value={pickup.name}
-            placeholder="Pickup location"
-            hint={pickup.address && pickup.placeId ? pickup.address : pickup.address || undefined}
-            onFocus={() => {
-              setFocus("pickup");
-              setFilter(pickup.name);
-            }}
-            onChange={(v) => typePlace("pickup", v)}
-          />
-          <button
-            type="button"
-            className="plan-ride__locate"
-            disabled={locating}
-            onClick={detectPickupLocation}
-          >
-            <LocateFixed className={cn("size-3.5 shrink-0", locating && "animate-pulse")} />
-            {locating ? "Detecting location…" : "Use my current location"}
-          </button>
-
-          {stops.map((stop, index) => (
-            <div key={stop.id} className="plan-ride__stop-row">
+          <div className="plan-ride__route-wrap">
+            <div className="plan-ride__route">
               <PlaceField
-                tone="stop"
-                active={focus === `stop-${index}`}
-                value={stop.name}
-                placeholder={`Stop ${index + 1}`}
+                tone="pickup"
+                active={focus === "pickup"}
+                value={pickup.name}
+                placeholder="Pickup location"
+                hint={pickup.address && pickup.placeId ? pickup.address : pickup.address || undefined}
                 onFocus={() => {
-                  setFocus(`stop-${index}`);
-                  setFilter(stop.name);
+                  setFocus("pickup");
+                  setFilter(pickup.name);
                 }}
-                onChange={(v) => typePlace(`stop-${index}`, v)}
+                onChange={(v) => typePlace("pickup", v)}
               />
               <button
                 type="button"
-                className="plan-ride__remove-stop"
-                aria-label={`Remove stop ${index + 1}`}
-                onClick={() => removeStop(index)}
+                className="plan-ride__locate"
+                disabled={locating}
+                onClick={detectPickupLocation}
               >
-                <X className="size-3.5" />
+                <LocateFixed className={cn("size-3.5 shrink-0", locating && "animate-pulse")} />
+                {locating ? "Detecting location…" : "Use my current location"}
               </button>
-            </div>
-          ))}
 
-          {isMulti ? (
-            <button type="button" className="plan-ride__add-inside" onClick={addStop}>
-              <Plus className="size-4 shrink-0" />
-              Add stop
-            </button>
-          ) : null}
+              {stops.map((stop, index) => (
+                <div key={stop.id} className="plan-ride__stop-row">
+                  <PlaceField
+                    tone="stop"
+                    active={focus === `stop-${index}`}
+                    value={stop.name}
+                    placeholder={`Stop ${index + 1}`}
+                    onFocus={() => {
+                      setFocus(`stop-${index}`);
+                      setFilter(stop.name);
+                    }}
+                    onChange={(v) => typePlace(`stop-${index}`, v)}
+                  />
+                  <button
+                    type="button"
+                    className="plan-ride__remove-stop"
+                    aria-label={`Remove stop ${index + 1}`}
+                    onClick={() => removeStop(index)}
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              ))}
 
-          <PlaceField
-            tone="drop"
-            active={focus === "drop"}
-            value={drop.name}
-            placeholder="Where to?"
-            hint={drop.address && drop.placeId ? drop.address : drop.address || undefined}
-            onFocus={() => {
-              setFocus("drop");
-              setFilter(drop.name);
-            }}
-            onChange={(v) => typePlace("drop", v)}
-          />
-        </div>
-      </div>
-
-      <div className="plan-ride__purpose">
-        <Input
-          value={purpose}
-          onChange={(e) => setPurpose(e.target.value)}
-          placeholder="Purpose (meeting, airport…)"
-          className="plan-ride__purpose-input"
-          required
-        />
-      </div>
-
-      <section
-        ref={suggestRef}
-        className={cn("plan-ride__suggest", savedFlash && "plan-ride__suggest--flash")}
-      >
-        <p className="plan-ride__suggest-label">
-          {filter.trim() ? "Matches" : "Saved places"}
-        </p>
-        {suggestions.length === 0 ? (
-          <p className="plan-ride__empty">
-            {filter.trim()
-              ? "No saved match — keep your typed place name, or pick from the list."
-              : locations.isLoading
-                ? "Loading saved places…"
-                : "No saved locations yet. Type a place name above, or ask admin to add places."}
-          </p>
-        ) : (
-          <ul className="plan-ride__suggest-list">
-            {suggestions.map((loc) => (
-              <li key={loc.id}>
-                <button type="button" className="plan-ride__suggest-row" onClick={() => selectPlace(loc)}>
-                  <span className="plan-ride__suggest-icon">
-                    <Clock className="size-4" />
-                  </span>
-                  <span className="min-w-0 flex-1 text-left">
-                    <span className="plan-ride__suggest-name">{loc.name}</span>
-                    <span className="plan-ride__suggest-addr">{loc.address || "Saved location"}</span>
-                  </span>
+              {isMulti ? (
+                <button type="button" className="plan-ride__add-inside" onClick={addStop}>
+                  <Plus className="size-4 shrink-0" />
+                  Add stop
                 </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+              ) : null}
 
-      <div className="plan-ride__utils">
-        <button type="button" className="plan-ride__util" onClick={showSavedPlaces}>
-          <span className="plan-ride__util-icon">
-            <Star className="size-4" />
-          </span>
-          Saved places
-        </button>
-        <button type="button" className="plan-ride__util" onClick={() => setMapOpen(true)}>
-          <span className="plan-ride__util-icon">
-            <MapPin className="size-4" />
-          </span>
-          Preview route on map
-        </button>
-      </div>
+              <PlaceField
+                tone="drop"
+                active={focus === "drop"}
+                value={drop.name}
+                placeholder="Where to?"
+                hint={drop.address && drop.placeId ? drop.address : drop.address || undefined}
+                onFocus={() => {
+                  setFocus("drop");
+                  setFilter(drop.name);
+                }}
+                onChange={(v) => typePlace("drop", v)}
+              />
+            </div>
+          </div>
 
-      <div className="plan-ride__footer">
-        <Button
-          type="button"
-          className="plan-ride__submit"
-          disabled={busy}
-          onClick={() => void submit()}
-        >
-          {busy ? "Submitting…" : "Request vehicle"}
-        </Button>
+          <section className="plan-ride__suggest">
+            <p className="plan-ride__suggest-label">
+              {filter.trim() ? "Matches" : "Saved places"}
+            </p>
+            {suggestions.length === 0 ? (
+              <p className="plan-ride__empty">
+                {filter.trim()
+                  ? "No saved match — keep your typed place name, or pick from the list."
+                  : locations.isLoading
+                    ? "Loading saved places…"
+                    : "No saved locations yet. Type a place name above, or ask admin to add places."}
+              </p>
+            ) : (
+              <ul className="plan-ride__suggest-list">
+                {suggestions.map((loc) => (
+                  <li key={loc.id}>
+                    <button type="button" className="plan-ride__suggest-row" onClick={() => selectPlace(loc)}>
+                      <span className="plan-ride__suggest-icon">
+                        <Clock className="size-4" />
+                      </span>
+                      <span className="min-w-0 flex-1 text-left">
+                        <span className="plan-ride__suggest-name">{loc.name}</span>
+                        <span className="plan-ride__suggest-addr">{loc.address || "Saved location"}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <div className="plan-ride__purpose">
+            <Input
+              value={purpose}
+              onChange={(e) => setPurpose(e.target.value)}
+              placeholder="Purpose (meeting, airport…)"
+              className="plan-ride__purpose-input"
+              required
+            />
+          </div>
+
+          <div className="plan-ride__utils">
+            <button
+              type="button"
+              className="plan-ride__util plan-ride__util--map-mobile"
+              onClick={() => setMapOpen(true)}
+            >
+              <span className="plan-ride__util-icon">
+                <MapPin className="size-4" />
+              </span>
+              Preview route on map
+            </button>
+          </div>
+
+          <div className="plan-ride__footer">
+            <Button
+              type="button"
+              className="plan-ride__submit"
+              disabled={busy}
+              onClick={() => void submit()}
+            >
+              {busy ? "Submitting…" : "Request vehicle"}
+            </Button>
+          </div>
+        </div>
+
+        <aside className="plan-ride__aside">
+          <section className="plan-ride__map-card" aria-label="Route preview">
+            <p className="plan-ride__aside-label">Route preview</p>
+            {routeMapPoints.length >= 1 ? (
+              <OsmRouteMap points={routeMapPoints} className="plan-ride__map-el" showSummary />
+            ) : (
+              <p className="plan-ride__map-empty">Add pickup and Where to? to see the route.</p>
+            )}
+          </section>
+        </aside>
       </div>
 
       <Sheet open={timeOpen} onOpenChange={setTimeOpen}>

@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Car, User } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -42,6 +42,7 @@ function requesterInitials(name: string) {
 export function AdminRideDetail({ requestId }: { requestId: string }) {
   const { data, isLoading } = useRequest(requestId);
   const { isDispatcher, user } = useAuth();
+  const navigate = useNavigate();
   const decide = useDecideRequest();
   const [changeAssign, setChangeAssign] = useState(false);
 
@@ -100,7 +101,19 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
       : null;
   const trail: LatLng[] = (loc.data?.trail ?? []).map((p) => [p.lat, p.lng] as LatLng);
   const focusIdx = trip ? trackFocusIndex(trip.status, mapPoints, trip.current_stop_index ?? 0) : 0;
-  const passengers = (data.passengers ?? []) as Passenger[];
+  const passengersRaw = (data.passengers ?? []) as Passenger[];
+  const passengers =
+    passengersRaw.length > 0
+      ? passengersRaw
+      : request.requester_name
+        ? [
+            {
+              id: "requester",
+              full_name: request.requester_name,
+              phone: request.requester_phone ?? null,
+            },
+          ]
+        : [];
   const historyRows = ((history.data ?? []) as { id: string; to_status: string; created_at: string }[]).slice(
     -4,
   );
@@ -141,12 +154,23 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
     );
 
   return (
-    <AppShell title="Ride details" subtitle={request.reference} fillViewport>
+    <AppShell title="Ride details" subtitle={request.reference} fillViewport backTo="/requests" backLabel="Back to requests">
       <div className="plan-ride ride-detail ride-detail--admin">
         <header className="plan-ride__top">
-          <Link to="/requests" className="plan-ride__back" aria-label="Back">
+          <button
+            type="button"
+            className="plan-ride__back"
+            aria-label="Back"
+            onClick={() => {
+              if (typeof window !== "undefined" && window.history.length > 1) {
+                window.history.back();
+                return;
+              }
+              void navigate({ to: "/requests" });
+            }}
+          >
             <ArrowLeft className="size-5" />
-          </Link>
+          </button>
           <h1 className="plan-ride__title">Ride details</h1>
           <span className="plan-ride__top-spacer" aria-hidden />
         </header>
@@ -262,6 +286,28 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
             ) : null}
 
             <div className="ride-detail__map-mobile">{mapBlock}</div>
+
+            {passengers.length > 0 ? (
+              <section className="ride-detail__card ride-detail__card--tight">
+                <p className="ride-detail__card-title">
+                  Passengers · {request.passenger_count}
+                </p>
+                <ul className="ride-detail__pax-list">
+                  {passengers.map((p) => (
+                    <li key={p.id} className="ride-detail__pax-row">
+                      <span className="ride-detail__assign-name">{p.full_name}</span>
+                      {p.phone ? (
+                        <a href={`tel:${p.phone}`} className="ride-detail__assign-sub ride-detail__who-phone">
+                          {p.phone}
+                        </a>
+                      ) : (
+                        <span className="ride-detail__assign-sub">No phone</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
 
             {isAssigned ? (
               <section className="ride-detail__card ride-detail__card--tight">
@@ -384,22 +430,6 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
                       <span className="ride-detail__history-time">Current</span>
                     </li>
                   ) : null}
-                </ul>
-              </section>
-            ) : null}
-
-            {passengers.length > 0 ? (
-              <section className="ride-detail__card ride-detail__card--tight">
-                <p className="ride-detail__card-title">
-                  Passengers · {passengers.length}
-                </p>
-                <ul className="ride-detail__pax-list">
-                  {passengers.map((p) => (
-                    <li key={p.id} className="ride-detail__pax-row">
-                      <span className="ride-detail__assign-name">{p.full_name}</span>
-                      {p.phone ? <span className="ride-detail__assign-sub">{p.phone}</span> : null}
-                    </li>
-                  ))}
                 </ul>
               </section>
             ) : null}

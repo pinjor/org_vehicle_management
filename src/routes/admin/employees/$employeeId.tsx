@@ -1,5 +1,4 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { AppShell } from "@/components/app-shell";
 import { LookupChip } from "@/components/lookup-chip";
@@ -58,14 +57,9 @@ function EmployeeProfilePage() {
       title={profile.full_name}
       subtitle={[profile.department_name, profile.employee_code].filter(Boolean).join(" · ") || "Employee"}
       actions={<StatusChip label="Employee" tone="neutral" />}
+      backTo="/admin/employees"
+      backLabel="Back to employees"
     >
-      <Link
-        to="/admin/employees"
-        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" /> Employees
-      </Link>
-
       <div className="profile-page page-stack">
         <KpiGrid className="sm:grid-cols-3">
           <KpiCard label="Total requests" value={requests.length} tone="primary" />

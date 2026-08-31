@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Wrench } from "lucide-react";
+import { Wrench } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { LookupChip } from "@/components/lookup-chip";
@@ -178,14 +178,9 @@ function VehicleProfilePage() {
       title={vehicle.name}
       subtitle={`${vehicle.fleet_number} · ${vehicle.registration_number} · ${categoryChipLabel(vehicle.category)}`}
       actions={<LookupChip group="vehicle_status" value={vehicle.operational_status} />}
+      backTo="/fleet"
+      backLabel="Back to fleet register"
     >
-      <Link
-        to="/fleet"
-        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" /> Fleet register
-      </Link>
-
       {!isDispatcher && (
         <p className="mb-3 rounded-lg border border-border bg-surface-2/60 px-3 py-2 text-sm text-muted-foreground">
           View only. Contact dispatch to update this vehicle record.

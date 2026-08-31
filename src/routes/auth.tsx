@@ -68,6 +68,7 @@ function AuthPage() {
 
       if (!result.allowed) {
         if (result.reason === "already_registered") {
+          // Returning user — password required to sign in
           if (password.length < 6) {
             toast.error("Enter your password to sign in");
             return;
@@ -84,7 +85,7 @@ function AuthPage() {
         return;
       }
 
-      // On admin roster, no account yet → set password directly
+      // New on roster (no account yet) — go set password even if password field blank
       setRosterInfo(result);
       setPassword("");
       setShowPassword(false);
@@ -144,7 +145,7 @@ function AuthPage() {
                 <FormHeader
                   size="md"
                   title="Sign in"
-                  description="Use your roster mobile number. First time? We'll take you to set a password."
+                  description="Use your roster mobile number. First time? Leave password blank and continue — we'll take you to set one."
                 />
                 <AuthField label="Mobile number">
                   <PhoneInput value={phoneLocal} onChange={setPhoneLocal} />
