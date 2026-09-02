@@ -24,7 +24,7 @@ export const Route = createFileRoute("/requests/new")({
 function NewRequestPage() {
   const search = Route.useSearch();
   return (
-    <AppShell title="Plan your ride" subtitle="Request a vehicle">
+    <AppShell title="Plan your ride" subtitle="Request a vehicle" fillViewport>
       <EmployeeRideBooking initialDropId={search.to ?? search.pickup} />
     </AppShell>
   );

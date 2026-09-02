@@ -27,6 +27,35 @@ export const Route = createFileRoute("/auth")({
 
 type AuthView = "signin" | "set-password";
 
+const DEMO_USERS = [
+  {
+    id: "admin",
+    role: "Admin",
+    name: "Transport Admin",
+    detail: "Dispatch, fleet, approvals",
+    phone: "1711000001",
+    password: "admin123",
+  },
+  {
+    id: "employee",
+    role: "Employee",
+    name: "Nusrat Jahan",
+    detail: "Request & track rides",
+    phone: "1712000003",
+    password: "emp123",
+  },
+  {
+    id: "driver",
+    role: "Driver",
+    name: "Karim Hassan",
+    detail: "Assigned trips & navigation",
+    phone: "1712000002",
+    password: "driver123",
+  },
+] as const;
+
+type DemoUser = (typeof DEMO_USERS)[number];
+
 function AuthPage() {
   const [view, setView] = useState<AuthView>("signin");
   const [phoneLocal, setPhoneLocal] = useState("");
@@ -34,6 +63,7 @@ function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [rosterInfo, setRosterInfo] = useState<RosterLookup | null>(null);
   const [busy, setBusy] = useState(false);
+  const [demoBusyId, setDemoBusyId] = useState<string | null>(null);
   const [notEnlistedOpen, setNotEnlistedOpen] = useState(false);
   const { session, refresh } = useAuth();
   const navigate = useNavigate();
@@ -119,6 +149,27 @@ function AuthPage() {
     }
   }
 
+  async function demoSignIn(user: DemoUser) {
+    if (busy || demoBusyId) return;
+    setView("signin");
+    setRosterInfo(null);
+    setPhoneLocal(user.phone);
+    setPassword(user.password);
+    setShowPassword(false);
+    setDemoBusyId(user.id);
+    setBusy(true);
+    try {
+      await apiPost("/api/auth/login", { phone: user.phone, password: user.password });
+      await refresh();
+      toast.success(`Signed in as ${user.role}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Demo sign-in failed");
+    } finally {
+      setBusy(false);
+      setDemoBusyId(null);
+    }
+  }
+
   const visualCaption =
     view === "signin"
       ? "Plan trips & manage your fleet in one place."
@@ -166,8 +217,36 @@ function AuthPage() {
                   disabled={busy || !isValidBdPhone(phoneLocal)}
                   tooltip="Sign in, or continue to set password if your phone is on the roster"
                 >
-                  {busy ? "Please wait…" : "Continue"}
+                  {busy && !demoBusyId ? "Please wait…" : "Continue"}
                 </Button>
+
+                <div className="auth-demo">
+                  <p className="auth-demo__label">Demo quick sign-in</p>
+                  <ul className="auth-demo__list">
+                    {DEMO_USERS.map((user) => (
+                      <li key={user.id}>
+                        <button
+                          type="button"
+                          className={cn(
+                            "auth-demo__btn",
+                            `auth-demo__btn--${user.id}`,
+                            demoBusyId === user.id && "auth-demo__btn--busy",
+                          )}
+                          disabled={busy}
+                          onClick={() => void demoSignIn(user)}
+                        >
+                          <span className="auth-demo__role">{user.role}</span>
+                          <span className="auth-demo__name">{user.name}</span>
+                          <span className="auth-demo__detail">{user.detail}</span>
+                          <span className="auth-demo__creds">
+                            0{user.phone} · {user.password}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
                 <p className="text-center text-sm text-[color:var(--auth-muted)]">
                   Must be on the admin roster before you can access FleetOps.
                 </p>

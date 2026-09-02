@@ -92,12 +92,13 @@ export function formatLocalClock(localInput: string): string {
   const [y, mo, d] = datePart!.split("-").map(Number);
   const [hh, mm] = timePart!.slice(0, 5).split(":").map(Number);
   const dt = new Date(y!, mo! - 1, d!, hh!, mm!);
-  return dt.toLocaleString(undefined, {
+  return dt.toLocaleString("en-US", {
     weekday: "short",
     day: "numeric",
     month: "short",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
+    hour12: true,
   });
 }
 
@@ -151,18 +152,15 @@ export type NominatimResult = {
   display_name: string;
 };
 
-/** Reverse geocode — Nominatim (OSM). Be gentle with rate limits. */
+/** Reverse geocode — via server proxy (Nominatim). */
 export async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
   try {
-    const url = new URL("https://nominatim.openstreetmap.org/reverse");
-    url.searchParams.set("lat", String(lat));
-    url.searchParams.set("lon", String(lng));
-    url.searchParams.set("format", "json");
-    const res = await fetch(url.toString(), {
-      headers: { Accept: "application/json" },
-    });
+    const res = await fetch(
+      `/api/geocode/reverse?${new URLSearchParams({ lat: String(lat), lng: String(lng) })}`,
+      { headers: { Accept: "application/json" } },
+    );
     if (!res.ok) return null;
-    const data = (await res.json()) as { display_name?: string };
+    const data = (await res.json()) as { display_name?: string | null };
     return data.display_name ?? null;
   } catch {
     return null;
@@ -173,14 +171,10 @@ export async function searchPlaces(query: string, limit = 6): Promise<NominatimR
   const q = query.trim();
   if (q.length < 2) return [];
   try {
-    const url = new URL("https://nominatim.openstreetmap.org/search");
-    url.searchParams.set("q", q);
-    url.searchParams.set("format", "json");
-    url.searchParams.set("limit", String(limit));
-    url.searchParams.set("countrycodes", "bd");
-    const res = await fetch(url.toString(), {
-      headers: { Accept: "application/json" },
-    });
+    const res = await fetch(
+      `/api/geocode/search?${new URLSearchParams({ q, limit: String(limit) })}`,
+      { headers: { Accept: "application/json" } },
+    );
     if (!res.ok) return [];
     return (await res.json()) as NominatimResult[];
   } catch {

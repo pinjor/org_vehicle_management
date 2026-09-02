@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AdminRideDetail } from "@/components/admin-ride-detail";
+import { AppShell } from "@/components/app-shell";
 import { EmployeeRideDetail } from "@/components/employee-ride-detail";
 import { useAuth } from "@/lib/auth";
 
@@ -22,7 +23,11 @@ function RequestDetailPage() {
   const { isEmployee, isDispatcher } = useAuth();
 
   if (isEmployee && !isDispatcher) {
-    return <EmployeeRideDetail requestId={requestId} />;
+    return (
+      <AppShell title="Ride details" subtitle="Your request">
+        <EmployeeRideDetail requestId={requestId} />
+      </AppShell>
+    );
   }
 
   return <AdminRideDetail requestId={requestId} />;

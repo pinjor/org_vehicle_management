@@ -1,56 +1,45 @@
 ---
-description: FleetOps responsive layout conventions — apply to all UI pages and components
+description: ALWAYS design for mobile AND desktop — balanced space, compact maps
 alwaysApply: true
 ---
 
-# FleetOps responsive layout
+# Responsive UI — non-negotiable (FleetOps)
 
-All new pages, forms, tables, and layout changes must work from 320px through desktop.
+User said this many times. Follow every UI create/change. Do not wait to be reminded.
 
-## Breakpoints (Tailwind v4)
+## Hard rules
 
-| Token | px | Use for |
-|-------|-----|---------|
-| `sm` | 640 | 2-col forms/KPIs, show secondary header text |
-| `md` | 768 | Table ↔ card list split |
-| `lg` | 1024 | Sidebar vs bottom nav, auth split, 2-col dashboards |
-| `xl` | 1280 | Dense KPI rows only (5+ columns) |
+1. **Every page/change = both viewports.** Mobile (<1024) AND desktop (≥1024). Never ship mobile-only layout that stays skinny on desktop.
+2. **Desktop must use screen space — balanced.** Full canvas width (no leftover gutters from `max-width: 28–36rem` + `margin-inline: auto`). 2-column when content fits. Do NOT starve form/content to feed a giant map.
+3. **Maps stay medium side panels on desktop** (~35–40% width, ~18–20rem tall). Form / primary content gets majority width. Boxes (route, lists, cards) must be roomy — not tiny islands.
+4. **Minimize needless desktop scroll** without crushing content. Cap secondary panels; keep primary actions readable.
+5. **Mobile stays mobile.** Sticky CTAs, bottom-nav clearance, sheets — keep.
+6. **Apply everywhere it is needed** — home, plan ride, request/trip detail, profile, list pages — not only the page just edited.
+7. **Verify both before done.** Check ≤1023 and ≥1024. Rebuild Docker app after UI CSS/JSX changes.
 
-**Nav boundary is `lg`**, not `md`.
+## Breakpoints
 
-## Required patterns
+| Token | px | Use |
+|-------|-----|-----|
+| `sm` | 640 | 2-col forms/KPIs |
+| `md` | 768 | Table ↔ card list |
+| `lg` | 1024 | Sidebar vs bottom nav; desktop splits start here |
+| `xl` | 1280 | Dense KPI rows only |
 
-### Tables
-Dual render — never horizontal-scroll-only on mobile:
+Nav boundary = **`lg`**, not `md`.
 
-```tsx
-<ul className="divide-y md:hidden">{/* cards */}</ul>
-<div className="hidden overflow-x-auto md:block">
-  <table className="data-table w-full">…</table>
-</div>
-```
+## Patterns
 
-See `src/routes/fleet.tsx`.
+- Detail pages: `ride-detail__desk` — main info left + map aside right
+- Booking: form majority + map panel
+- Home: hero 2-col (illus | where-to) + recent 2-col grid
+- Profile: full width at lg (no 28rem cage)
+- Tables: dual render (cards mobile, table `md+`)
 
-### Multi-column pages
-Prefer `lg:grid-cols-[…]` for operational 2-column layouts (dispatch, request detail, dashboards). Reserve `xl:` for 4+ KPI columns.
+## Ship checklist
 
-### Page structure
-- Wrap content in `page-stack`
-- Forms: `form-grid sm:grid-cols-2`
-- KPIs: `<KpiGrid>` or `sm:grid-cols-2 lg:grid-cols-4`
-- Use `min-w-0`, `truncate`, `flex-wrap` on headers and toolbars
-
-### Auth
-Layout lives in `src/styles.css` (`.auth-split-*`). Below `lg`: hide hero visual, form-only card. Do not animate/pan the whole SVG.
-
-### Shell
-`AppShell` handles mobile nav — do not add shadcn `SidebarProvider`. Main content uses `pb-20 lg:pb-4` for bottom nav clearance.
-
-## Checklist before shipping UI
-
-- [ ] Readable at 375px width
-- [ ] Touch targets ≥ 44px where tappable
-- [ ] No required horizontal scroll for primary actions
-- [ ] Header actions wrap (`flex-wrap`)
-- [ ] Inputs use `text-base` on mobile (see `styles.css` 640px rule — prevents iOS zoom)
+- [ ] 375px: readable, tappable, no required horizontal scroll
+- [ ] ≥1024px: full content width; roomy boxes; not phone column + empty gutters
+- [ ] Desktop: form/content majority; maps medium side panels
+- [ ] Same treatment on all related pages in the change, not one screen only
+- [ ] Mobile patterns still work

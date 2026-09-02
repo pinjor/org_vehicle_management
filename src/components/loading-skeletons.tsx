@@ -76,17 +76,55 @@ export function PanelSkeleton({ rows = 5, withSearch = false }: { rows?: number;
 
 export function ListRowSkeleton() {
   return (
-    <div className="flex flex-col gap-2 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0 flex-1 space-y-2">
-        <Skeleton className="h-4 w-3/5 max-w-xs" />
-        <Skeleton className="h-3 w-2/5 max-w-[200px]" />
-        <div className="flex gap-1.5">
-          <Skeleton className="h-5 w-14 rounded-full" />
+    <div className="trip-list-row pointer-events-none" aria-hidden>
+      <div className="flex flex-col gap-1 py-0.5">
+        <Skeleton className="h-4 w-14" />
+        <Skeleton className="h-2.5 w-10" />
+      </div>
+      <div className="trip-list-row__body">
+        <div className="trip-list-row__text space-y-1.5">
+          <Skeleton className="h-3.5 w-2/5 max-w-[180px]" />
+          <Skeleton className="h-3 w-3/5 max-w-xs" />
+        </div>
+        <div className="trip-list-row__end">
           <Skeleton className="h-5 w-16 rounded-full" />
-          <Skeleton className="h-5 w-12 rounded-full" />
         </div>
       </div>
-      <Skeleton className="h-6 w-20 rounded-full" />
+    </div>
+  );
+}
+
+function RequestCardSkeleton() {
+  return (
+    <div className="req-card-wrap pointer-events-none" aria-hidden>
+      <div className="req-card">
+        <div className="req-card__main">
+          <div className="req-card__layout req-card__layout--when">
+            <div className="flex flex-col gap-1.5 py-0.5">
+              <Skeleton className="h-5 w-16" />
+              <Skeleton className="h-3 w-12" />
+              <Skeleton className="h-2.5 w-10" />
+            </div>
+            <div className="req-card__content min-w-0 space-y-2">
+              <div className="req-card__top">
+                <div className="req-card__who space-y-1.5">
+                  <Skeleton className="h-4 w-36 max-w-full" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+                <Skeleton className="h-5 w-16 shrink-0 rounded-full" />
+              </div>
+              <div className="space-y-1.5">
+                <Skeleton className="h-3 w-4/5 max-w-sm" />
+                <Skeleton className="h-3 w-3/5 max-w-xs" />
+              </div>
+              <div className="flex gap-1.5">
+                <Skeleton className="h-4 w-12 rounded-full" />
+                <Skeleton className="h-4 w-14 rounded-full" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -104,7 +142,7 @@ export function RequestListSkeleton() {
       </div>
       <div className="divide-y divide-border">
         {Array.from({ length: 6 }).map((_, i) => (
-          <ListRowSkeleton key={i} />
+          <RequestCardSkeleton key={i} />
         ))}
       </div>
     </div>

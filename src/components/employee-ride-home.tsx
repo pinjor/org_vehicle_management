@@ -4,15 +4,19 @@ import {
   Building2,
   ChevronRight,
   Clock,
+  Phone,
   Plane,
   Search,
 } from "lucide-react";
 import { useMemo } from "react";
 import { EmployeeHomeIllustration } from "@/components/employee-home-illustration";
+import { WhenRail } from "@/components/info-blocks";
 import { LookupChip } from "@/components/lookup-chip";
 import { Button } from "@/components/ui/button";
 import { MetaChip } from "@/components/fleet-ui";
 import { useAuth } from "@/lib/auth";
+import { formatBdPhone } from "@/lib/phone";
+import { routeLine } from "@/lib/route-summary";
 import { useLocations, useRequests } from "@/lib/queries";
 
 type SavedLocation = {
@@ -46,7 +50,7 @@ function guessKind(name: string, type?: string | null): RecentPlace["kind"] {
 /** DriveFlow-style employee home: map card, Where to?, recent places. */
 export function EmployeeRideHome() {
   const { profile, user } = useAuth();
-  const mine = useRequests({ requesterId: user?.id });
+  const mine = useRequests(user?.id ? { requesterId: user.id } : undefined);
   const locations = useLocations();
 
   const rows = mine.data ?? [];
@@ -55,6 +59,16 @@ export function EmployeeRideHome() {
   const activeRide = [...rows]
     .filter((r) => ["assigned", "in_progress"].includes(r.status))
     .sort((a, b) => new Date(b.pickup_at).getTime() - new Date(a.pickup_at).getTime())[0];
+
+  const waitingRide = !activeRide
+    ? [...rows]
+        .filter((r) => ["submitted", "approved"].includes(r.status))
+        .sort((a, b) => new Date(a.pickup_at).getTime() - new Date(b.pickup_at).getTime())[0]
+    : undefined;
+
+  const banner = activeRide ?? waitingRide;
+  const isLive = !!activeRide;
+  const driverPhone = activeRide?.drivers?.phone;
 
   const recent = useMemo(() => {
     return saved.slice(0, 5).map((loc) => ({
@@ -70,29 +84,69 @@ export function EmployeeRideHome() {
 
   return (
     <div className="ride-home">
-      {activeRide ? (
-        <Link
-          to="/requests/$requestId"
-          params={{ requestId: activeRide.id }}
-          className="ride-home__active"
+      {banner ? (
+        <div
+          className={
+            isLive
+              ? "ride-home__active-card ride-home__active-card--live"
+              : "ride-home__active-card ride-home__active-card--wait"
+          }
         >
-          <div className="min-w-0 flex-1">
-            <p className="ride-home__active-label">Active ride</p>
-            <p className="ride-home__active-title truncate">
-              {activeRide.purpose || activeRide.reference}
-            </p>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              <LookupChip group="request_status" value={activeRide.status} />
-              {activeRide.vehicles?.registration_number ? (
-                <MetaChip label={activeRide.vehicles.registration_number} tone="neutral" />
-              ) : null}
+          <Link
+            to="/requests/$requestId"
+            params={{ requestId: banner.id }}
+            className="ride-home__active-main"
+          >
+            <WhenRail at={banner.pickup_at} size="sm" />
+            <div className="ride-home__active-body min-w-0 flex-1">
+              <p className="ride-home__active-label">
+                {isLive ? "Active ride" : "Awaiting dispatch"}
+              </p>
+              <p className="ride-home__active-title">
+                {routeLine(banner.request_route_points) ?? banner.purpose ?? "Your trip"}
+              </p>
+              {isLive && banner.drivers?.full_name ? (
+                <div className="ride-home__driver">
+                  <p className="ride-home__driver-name">{banner.drivers.full_name}</p>
+                  {driverPhone ? (
+                    <p className="ride-home__driver-phone">{formatBdPhone(driverPhone)}</p>
+                  ) : null}
+                  {banner.vehicles?.registration_number ? (
+                    <div className="ride-home__driver-meta">
+                      <span>{banner.vehicles.registration_number}</span>
+                      <span className="ride-home__driver-meta-sep">·</span>
+                      <LookupChip group="request_status" value={banner.status} />
+                    </div>
+                  ) : (
+                    <div className="mt-1">
+                      <LookupChip group="request_status" value={banner.status} />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <LookupChip group="request_status" value={banner.status} />
+                  {!isLive ? (
+                    <MetaChip label={`${banner.passenger_count} pax`} tone="neutral" />
+                  ) : null}
+                </div>
+              )}
             </div>
-          </div>
-          <span className="ride-home__active-cta">
-            Track
-            <ChevronRight className="size-4" />
-          </span>
-        </Link>
+            <span className="ride-home__active-cta">
+              {isLive ? "Track" : "View"}
+              <ChevronRight className="size-4" />
+            </span>
+          </Link>
+          {isLive && driverPhone ? (
+            <a href={`tel:${driverPhone}`} className="ride-home__call-bar">
+              <Phone className="size-4 shrink-0" />
+              <span className="ride-home__call-bar-text">
+                Call {banner.drivers?.full_name?.split(" ")[0] ?? "driver"}
+              </span>
+              <span className="ride-home__call-bar-num">{formatBdPhone(driverPhone)}</span>
+            </a>
+          ) : null}
+        </div>
       ) : null}
 
       <section className="ride-home__hero">
@@ -103,7 +157,7 @@ export function EmployeeRideHome() {
         <div className="ride-home__hero-body">
           <h2 className="ride-home__where">Where to?</h2>
           <p className="ride-home__where-sub">
-            {firstName ? `Hi ${firstName} — book a fleet vehicle` : "Book a fleet vehicle for your trip"}
+            {firstName ? `Hi ${firstName}` : "Book a ride"}
           </p>
 
           <Link to="/requests/new" className="ride-home__search" aria-label="Where to? — open book page">
@@ -115,18 +169,18 @@ export function EmployeeRideHome() {
           </Link>
 
           <Button asChild className="ride-home__go mt-3 w-full sm:w-auto" size="sm">
-            <Link to="/requests/new">Request vehicle</Link>
+            <Link to="/requests/new">Book ride</Link>
           </Button>
         </div>
       </section>
 
       <section className="ride-home__recent">
-        <h3 className="ride-home__recent-title">Recent</h3>
+        <h3 className="ride-home__recent-title">Saved places</h3>
         {recent.length === 0 ? (
           <div className="ride-home__empty">
-            <p className="font-medium text-[color:var(--ride-ink)]">No recent places yet</p>
+            <p className="font-medium text-[color:var(--ride-ink)]">No saved places yet</p>
             <p className="mt-1 text-sm text-[color:var(--ride-muted)]">
-              Saved locations and past trip destinations show up here.
+              Favorite offices and airports show up here for faster booking.
             </p>
             <Button asChild variant="outline" size="sm" className="mt-3">
               <Link to="/requests/new">Start a request</Link>

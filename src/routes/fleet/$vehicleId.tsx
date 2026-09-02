@@ -11,11 +11,11 @@ import {
   KpiCard,
   KpiGrid,
   List,
-  ListLink,
   ListRow,
   Panel,
   StatusChip,
 } from "@/components/fleet-ui";
+import { TripListRow } from "@/components/info-blocks";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
@@ -26,10 +26,8 @@ import {
   complianceTone,
   daysUntil,
   formatDate,
-  formatDateTime,
   kmUntilService,
   serviceTone,
-  TRIP_STATUS,
 } from "@/lib/fleet";
 import {
   useDrivers,
@@ -469,37 +467,24 @@ function VehicleProfilePage() {
               <List>
                 {(trips ?? []).slice(0, 12).map((t) => {
                   const requestId = t.request_id ?? t.vehicle_requests?.id;
-                  const row = (
-                    <>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium">{t.reference}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {t.vehicle_requests?.purpose ?? "Trip"} · {formatDateTime(t.vehicle_requests?.pickup_at ?? t.created_at)}
-                        </p>
-                        {t.driver_id && t.drivers?.full_name && (
-                          <div className="mt-1">
-                            <EntityProfileLink
-                              to="/drivers/$driverId"
-                              params={{ driverId: t.driver_id }}
-                              label={t.drivers.full_name}
-                              hint={t.drivers.driver_code ?? t.drivers.phone}
-                            />
-                          </div>
-                        )}
-                      </div>
-                      <StatusChip label={TRIP_STATUS[t.status]?.label ?? t.status} tone={TRIP_STATUS[t.status]?.tone ?? "neutral"} />
-                    </>
-                  );
-
                   return (
                     <ListRow key={t.id}>
-                      {requestId ? (
-                        <ListLink to="/requests/$requestId" params={{ requestId }}>
-                          {row}
-                        </ListLink>
-                      ) : (
-                        <div className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">{row}</div>
-                      )}
+                      <TripListRow
+                        when={t.vehicle_requests?.pickup_at ?? t.created_at}
+                        title={t.vehicle_requests?.requester_name?.trim() || t.vehicle_requests?.purpose || t.reference}
+                        subtitle={[
+                          t.drivers?.full_name ? `Driver ${t.drivers.full_name}` : null,
+                          t.vehicle_requests?.purpose && t.vehicle_requests?.requester_name
+                            ? t.vehicle_requests.purpose
+                            : null,
+                          t.reference,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                        end={<LookupChip group="trip_status" value={t.status} />}
+                        to={requestId ? "/requests/$requestId" : undefined}
+                        params={requestId ? { requestId } : undefined}
+                      />
                     </ListRow>
                   );
                 })}

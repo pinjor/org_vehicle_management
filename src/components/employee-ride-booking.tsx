@@ -7,20 +7,23 @@ import {
   LocateFixed,
   MapPin,
   Plus,
+  Star,
   Users,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { OsmRouteMap } from "@/components/osm-route-map";
+import { PlaceMapPicker } from "@/components/place-map-picker";
+import { PlanRideChooser } from "@/components/plan-ride-chooser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { MapPoint } from "@/components/trip-map";
 import { useAuth } from "@/lib/auth";
-import { toLocalInput } from "@/lib/fleet";
+import { toLocalInput, localInputToIso } from "@/lib/fleet";
+import { useIsDesktopLg } from "@/hooks/use-desktop-lg";
 import { useLookupOptions } from "@/lib/lookups-context";
-import { reverseGeocode } from "@/lib/osm";
+import { reverseGeocode, searchPlaces, type NominatimResult } from "@/lib/osm";
 import { normalizeBdPhone } from "@/lib/phone";
 import { useCreateRequest, useLocations } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -83,12 +86,36 @@ function formatPickupLabel(pickupAt: string): string {
   const now = new Date();
   const diffMin = (d.getTime() - now.getTime()) / 60_000;
   if (diffMin >= -5 && diffMin <= 45) return "Pickup soon";
-  return d.toLocaleString("en-GB", {
+  return d.toLocaleString("en-US", {
     day: "numeric",
     month: "short",
     hour: "numeric",
     minute: "2-digit",
+    hour12: true,
   });
+}
+
+function applySearchResult(result: NominatimResult, fallbackName: string) {
+  const lat = Number(result.lat);
+  const lng = Number(result.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const shortName = result.display_name.split(",")[0]?.trim() || fallbackName;
+  return {
+    placeId: "",
+    name: shortName,
+    address: result.display_name,
+    lat,
+    lng,
+  };
+}
+
+async function resolveStopCoords(stop: RouteStopDraft): Promise<RouteStopDraft> {
+  if (stop.lat != null && stop.lng != null) return stop;
+  const q = stop.name.trim();
+  if (!q) return stop;
+  const hits = await searchPlaces(q, 1);
+  const applied = hits[0] ? applySearchResult(hits[0], q) : null;
+  return applied ? { ...stop, ...applied } : stop;
 }
 
 /** Employee new request — Plan your ride (light). */
@@ -98,6 +125,7 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
   const locations = useLocations();
   const create = useCreateRequest();
   const tripTypes = useLookupOptions("trip_type");
+  const isDesktop = useIsDesktopLg();
 
   useEffect(() => {
     if (!loading && !session) void navigate({ to: "/auth" });
@@ -117,9 +145,12 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
   const [paxOpen, setPaxOpen] = useState(false);
   const [tripOpen, setTripOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
+  const [mapPickerOpen, setMapPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dropSeeded, setDropSeeded] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [searchResults, setSearchResults] = useState<NominatimResult[]>([]);
+  const [searching, setSearching] = useState(false);
 
   const savedLocations = (locations.data ?? []) as SavedLocation[];
 
@@ -133,20 +164,63 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
     setDropSeeded(true);
   }, [initialDropId, savedLocations, dropSeeded]);
 
-  const suggestions = useMemo(() => {
+  useEffect(() => {
+    const q = filter.trim();
+    if (q.length < 2) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const t = window.setTimeout(() => {
+      void searchPlaces(q, 5).then((rows) => {
+        setSearchResults(rows);
+        setSearching(false);
+      });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [filter]);
+
+  const savedSuggestions = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    const list = !q
-      ? savedLocations
-      : savedLocations.filter(
-          (l) =>
-            l.name.toLowerCase().includes(q) ||
-            (l.address ?? "").toLowerCase().includes(q),
-        );
-    return list.slice(0, 4);
+    if (!q) return savedLocations.slice(0, 6);
+    const tokens = q.split(/\s+/).filter(Boolean);
+    const scored = savedLocations
+      .map((l) => {
+        const name = l.name.toLowerCase();
+        const addr = (l.address ?? "").toLowerCase();
+        const hay = `${name} ${addr}`;
+        if (!tokens.every((t) => hay.includes(t))) return null;
+        let score = 0;
+        if (name.startsWith(q)) score += 40;
+        if (name.includes(q)) score += 20;
+        if (addr.includes(q)) score += 8;
+        tokens.forEach((t) => {
+          if (name.startsWith(t)) score += 10;
+          if (name.includes(t)) score += 5;
+        });
+        return { loc: l, score };
+      })
+      .filter((x): x is { loc: SavedLocation; score: number } => x != null)
+      .sort((a, b) => b.score - a.score || a.loc.name.localeCompare(b.loc.name));
+    return scored.slice(0, 6).map((x) => x.loc);
   }, [savedLocations, filter]);
+
+  const isSearching = filter.trim().length >= 2;
 
   const isMulti = tripCategory === "multi_stop" || stops.length > 0;
   const isRound = tripCategory === "round_trip";
+
+  const placesReady =
+    pickup.lat != null &&
+    pickup.lng != null &&
+    drop.lat != null &&
+    drop.lng != null &&
+    (!isMulti ||
+      stops.every((s) => !s.name.trim() || (s.lat != null && s.lng != null)));
+
+  /** Hide saved/search lists once route is set — show again only while typing/editing. */
+  const showSuggest = isSearching || !placesReady;
 
   const routeMapPoints: MapPoint[] = (() => {
     const pts: MapPoint[] = [];
@@ -181,24 +255,95 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
     return pts;
   })();
 
+  /** While typing, plot Nominatim hits so aside map never goes blank. */
+  const mapPreviewPoints: MapPoint[] = (() => {
+    if (isSearching && searchResults.length > 0) {
+      return searchResults.slice(0, 5).map((r, i) => ({
+        name: r.display_name.split(",")[0]?.trim() || r.display_name,
+        address: r.display_name,
+        latitude: Number(r.lat),
+        longitude: Number(r.lon),
+        point_type: i === 0 ? "pickup" : "stop",
+      }));
+    }
+    return routeMapPoints;
+  })();
+
+  function applyPlace(
+    field: FocusField,
+    place: { placeId?: string; name: string; address: string; lat: number; lng: number },
+  ) {
+    const draft = {
+      placeId: place.placeId ?? "",
+      name: place.name,
+      address: place.address,
+      lat: place.lat,
+      lng: place.lng,
+    };
+    if (field === "pickup") {
+      setPickup((p) => ({ ...p, ...draft }));
+      setFilter("");
+      // If drop already set, collapse picker; else move to drop
+      setFocus(drop.lat != null && drop.lng != null ? null : "drop");
+      return;
+    }
+    if (field?.startsWith("stop-")) {
+      const idx = Number(field.split("-")[1]);
+      setStops((prev) => prev.map((s, i) => (i === idx ? { ...s, ...draft } : s)));
+      setFilter("");
+      setFocus(drop.lat != null && drop.lng != null ? null : "drop");
+      return;
+    }
+    if (field === "drop") {
+      setDrop((d) => ({ ...d, ...draft }));
+      setFilter("");
+      setFocus(null);
+    }
+  }
+
   function selectPlace(loc: SavedLocation) {
     const applied = applyLoc(loc);
-    if (focus === "pickup") {
-      setPickup({ ...pickup, ...applied });
-      setFocus("drop");
-      setFilter("");
+    if (!applied.lat || !applied.lng) {
+      toast.error("This saved place has no map coordinates");
       return;
     }
+    applyPlace(focus, { ...applied, lat: applied.lat, lng: applied.lng });
+  }
+
+  function selectSearchResult(result: NominatimResult) {
+    const applied = applySearchResult(result, filter.trim());
+    if (!applied || !focus) return;
+    applyPlace(focus, applied);
+  }
+
+  function confirmMapPick(place: { name: string; address: string; lat: number; lng: number }) {
+    if (!focus) return;
+    applyPlace(focus, place);
+    toast.success("Location set on map");
+  }
+
+  function mapPickerSeed(): { lat: number | null; lng: number | null } {
+    if (focus === "pickup") return { lat: pickup.lat, lng: pickup.lng };
+    if (focus === "drop") return { lat: drop.lat, lng: drop.lng };
     if (focus?.startsWith("stop-")) {
       const idx = Number(focus.split("-")[1]);
-      setStops((prev) => prev.map((s, i) => (i === idx ? { ...s, ...applied } : s)));
-      setFocus("drop");
-      setFilter("");
-      return;
+      const stop = stops[idx];
+      return stop ? { lat: stop.lat, lng: stop.lng } : { lat: null, lng: null };
     }
-    setDrop({ ...drop, ...applied });
-    setFilter("");
-    setFocus("drop");
+    return { lat: null, lng: null };
+  }
+
+  function mapPickerTitle() {
+    if (focus === "pickup") return "Set pickup on map";
+    if (focus === "drop") return "Set destination on map";
+    if (focus?.startsWith("stop-")) return `Set stop ${Number(focus.split("-")[1]) + 1} on map`;
+    return "Set location on map";
+  }
+
+  function mapPickerTone(): "pickup" | "stop" | "drop" {
+    if (focus === "drop") return "drop";
+    if (focus?.startsWith("stop-")) return "stop";
+    return "pickup";
   }
 
   function typePlace(field: FocusField, value: string) {
@@ -321,51 +466,58 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
       return;
     }
 
-    const namedStops = stops.filter((s) => s.name.trim());
-    const useMulti = tripCategory === "multi_stop" || namedStops.length > 0;
-    const points = useMulti
-      ? [
-          {
-            name: pickup.name,
-            address: pickup.address || pickup.name,
-            latitude: pickup.lat,
-            longitude: pickup.lng,
-            point_type: "pickup",
-          },
-          ...namedStops.map((s) => ({
-            name: s.name,
-            address: s.address || s.name,
-            latitude: s.lat,
-            longitude: s.lng,
-            point_type: "stop",
-          })),
-          {
-            name: drop.name,
-            address: drop.address || drop.name,
-            latitude: drop.lat,
-            longitude: drop.lng,
-            point_type: "destination",
-          },
-        ]
-      : [
-          {
-            name: pickup.name,
-            address: pickup.address || pickup.name,
-            latitude: pickup.lat,
-            longitude: pickup.lng,
-            point_type: "pickup",
-          },
-          {
-            name: drop.name,
-            address: drop.address || drop.name,
-            latitude: drop.lat,
-            longitude: drop.lng,
-            point_type: "destination",
-          },
-        ];
-
     setBusy(true);
     try {
+      const resolvedPickup = await resolveStopCoords(pickup);
+      const resolvedDrop = await resolveStopCoords(drop);
+      const resolvedStops = await Promise.all(stops.map((s) => resolveStopCoords(s)));
+      setPickup(resolvedPickup);
+      setDrop(resolvedDrop);
+      setStops(resolvedStops);
+
+      const namedStops = resolvedStops.filter((s) => s.name.trim());
+      const useMulti = tripCategory === "multi_stop" || namedStops.length > 0;
+      const points = useMulti
+        ? [
+            {
+              name: resolvedPickup.name,
+              address: resolvedPickup.address || resolvedPickup.name,
+              latitude: resolvedPickup.lat,
+              longitude: resolvedPickup.lng,
+              point_type: "pickup",
+            },
+            ...namedStops.map((s) => ({
+              name: s.name,
+              address: s.address || s.name,
+              latitude: s.lat,
+              longitude: s.lng,
+              point_type: "stop",
+            })),
+            {
+              name: resolvedDrop.name,
+              address: resolvedDrop.address || resolvedDrop.name,
+              latitude: resolvedDrop.lat,
+              longitude: resolvedDrop.lng,
+              point_type: "destination",
+            },
+          ]
+        : [
+            {
+              name: resolvedPickup.name,
+              address: resolvedPickup.address || resolvedPickup.name,
+              latitude: resolvedPickup.lat,
+              longitude: resolvedPickup.lng,
+              point_type: "pickup",
+            },
+            {
+              name: resolvedDrop.name,
+              address: resolvedDrop.address || resolvedDrop.name,
+              latitude: resolvedDrop.lat,
+              longitude: resolvedDrop.lng,
+              point_type: "destination",
+            },
+          ];
+
       const res = await create.mutateAsync({
         requesterId: user.id,
         requesterName: profile?.full_name || "Employee",
@@ -377,8 +529,9 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
         priority: "normal",
         requestedCategory: null,
         passengerCount,
-        pickupAt,
-        expectedEndAt: endAtFromPickup(pickupAt, useMulti ? 3 : 2),
+        pickupAt: localInputToIso(pickupAt),
+        expectedEndAt: localInputToIso(endAtFromPickup(pickupAt, useMulti ? 3 : 2)),
+        journeyDate: pickupAt.slice(0, 10),
         isRoundTrip: !useMulti && isRound,
         returnPickupAt: null,
         returnExpectedEndAt: null,
@@ -413,24 +566,101 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
 
       <div className="plan-ride__body">
         <div className="plan-ride__form">
-          <div className="plan-ride__pills">
-            <button type="button" className="plan-ride__pill" onClick={() => setTimeOpen(true)}>
-              <Clock className="size-3.5 shrink-0" />
-              <span className="truncate">{formatPickupLabel(pickupAt)}</span>
-              <ChevronDown className="size-3.5 shrink-0 opacity-70" />
-            </button>
-            <button type="button" className="plan-ride__pill" onClick={() => setPaxOpen(true)}>
-              <Users className="size-3.5 shrink-0" />
-              <span className="truncate">
-                {passengerCount} {passengerCount === 1 ? "passenger" : "passengers"}
-              </span>
-              <ChevronDown className="size-3.5 shrink-0 opacity-70" />
-            </button>
-            <button type="button" className="plan-ride__pill" onClick={() => setTripOpen(true)}>
-              <span className="truncate">{tripLabel}</span>
-              <ChevronDown className="size-3.5 shrink-0 opacity-70" />
-            </button>
-          </div>
+          {isDesktop ? (
+            <div className="plan-ride__meta-desk" aria-label="Ride options">
+              <label className="plan-ride__meta-field">
+                <span className="plan-ride__meta-label">Date</span>
+                <Input
+                  type="date"
+                  value={pickupAt.slice(0, 10)}
+                  onChange={(e) => {
+                    const date = e.target.value || pickupAt.slice(0, 10);
+                    const time = pickupAt.slice(11, 16) || "09:00";
+                    setPickupAt(`${date}T${time}`);
+                  }}
+                  className="plan-ride__meta-input"
+                />
+              </label>
+              <label className="plan-ride__meta-field">
+                <span className="plan-ride__meta-label">Time</span>
+                <Input
+                  type="time"
+                  value={pickupAt.slice(11, 16) || "09:00"}
+                  onChange={(e) => {
+                    const date = pickupAt.slice(0, 10) || toLocalInput(new Date()).slice(0, 10);
+                    const time = e.target.value || "09:00";
+                    setPickupAt(`${date}T${time}`);
+                  }}
+                  className="plan-ride__meta-input"
+                />
+              </label>
+              <div className="plan-ride__meta-field plan-ride__meta-field--pax">
+                <span className="plan-ride__meta-label">Passengers</span>
+                <div className="plan-ride__meta-stepper" role="group" aria-label="Passenger count">
+                  <button
+                    type="button"
+                    className="plan-ride__meta-step"
+                    aria-label="Fewer passengers"
+                    disabled={passengerCount <= 1}
+                    onClick={() => setPassengerCount((n) => Math.max(1, n - 1))}
+                  >
+                    −
+                  </button>
+                  <span className="plan-ride__meta-step-val">{passengerCount}</span>
+                  <button
+                    type="button"
+                    className="plan-ride__meta-step"
+                    aria-label="More passengers"
+                    disabled={passengerCount >= 20}
+                    onClick={() => setPassengerCount((n) => Math.min(20, n + 1))}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              <label className="plan-ride__meta-field plan-ride__meta-field--trip">
+                <span className="plan-ride__meta-label">Trip type</span>
+                <select
+                  className="plan-ride__meta-select"
+                  value={tripCategory}
+                  onChange={(e) => {
+                    const key = e.target.value;
+                    setTripCategory(key);
+                    if (key === "multi_stop" && stops.length === 0) {
+                      setStops([newStop()]);
+                      setFocus("stop-0");
+                    }
+                    if (key !== "multi_stop") setStops([]);
+                  }}
+                >
+                  {tripTypes.map((opt) => (
+                    <option key={opt.value_key} value={opt.value_key}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          ) : (
+            <div className="plan-ride__pills">
+              <button type="button" className="plan-ride__pill" onClick={() => setTimeOpen(true)}>
+                <Clock className="size-3.5 shrink-0" />
+                <span className="truncate">{formatPickupLabel(pickupAt)}</span>
+                <ChevronDown className="size-3.5 shrink-0 opacity-70" />
+              </button>
+              <button type="button" className="plan-ride__pill" onClick={() => setPaxOpen(true)}>
+                <Users className="size-3.5 shrink-0" />
+                <span className="truncate">
+                  {passengerCount} {passengerCount === 1 ? "passenger" : "passengers"}
+                </span>
+                <ChevronDown className="size-3.5 shrink-0 opacity-70" />
+              </button>
+              <button type="button" className="plan-ride__pill" onClick={() => setTripOpen(true)}>
+                <span className="truncate">{tripLabel}</span>
+                <ChevronDown className="size-3.5 shrink-0 opacity-70" />
+              </button>
+            </div>
+          )}
 
           <div className="plan-ride__route-wrap">
             <div className="plan-ride__route">
@@ -439,7 +669,7 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
                 active={focus === "pickup"}
                 value={pickup.name}
                 placeholder="Pickup location"
-                hint={pickup.address && pickup.placeId ? pickup.address : pickup.address || undefined}
+                hint={pickup.address || undefined}
                 onFocus={() => {
                   setFocus("pickup");
                   setFilter(pickup.name);
@@ -492,7 +722,7 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
                 active={focus === "drop"}
                 value={drop.name}
                 placeholder="Where to?"
-                hint={drop.address && drop.placeId ? drop.address : drop.address || undefined}
+                hint={drop.address || undefined}
                 onFocus={() => {
                   setFocus("drop");
                   setFilter(drop.name);
@@ -502,194 +732,327 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
             </div>
           </div>
 
+          {showSuggest ? (
           <section className="plan-ride__suggest">
-            <p className="plan-ride__suggest-label">
-              {filter.trim() ? "Matches" : "Saved places"}
-            </p>
-            {suggestions.length === 0 ? (
-              <p className="plan-ride__empty">
-                {filter.trim()
-                  ? "No saved match — keep your typed place name, or pick from the list."
-                  : locations.isLoading
-                    ? "Loading saved places…"
-                    : "No saved locations yet. Type a place name above, or ask admin to add places."}
-              </p>
+            {!isSearching ? (
+              <>
+                <p className="plan-ride__suggest-label">Saved places</p>
+                {locations.isLoading ? (
+                  <p className="plan-ride__empty">Loading saved places…</p>
+                ) : savedSuggestions.length === 0 ? (
+                  <p className="plan-ride__empty">
+                    No saved locations yet. Search a place or set one on the map.
+                  </p>
+                ) : (
+                  <ul className="plan-ride__suggest-list">
+                    {savedSuggestions.map((loc) => (
+                      <li key={loc.id}>
+                        <button
+                          type="button"
+                          className="plan-ride__suggest-row"
+                          onClick={() => selectPlace(loc)}
+                        >
+                          <span className="plan-ride__suggest-icon plan-ride__suggest-icon--saved">
+                            <Star className="size-4" />
+                          </span>
+                          <span className="min-w-0 flex-1 text-left">
+                            <span className="plan-ride__suggest-name">{loc.name}</span>
+                            <span className="plan-ride__suggest-addr">
+                              {loc.address || "Saved location"}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
             ) : (
-              <ul className="plan-ride__suggest-list">
-                {suggestions.map((loc) => (
-                  <li key={loc.id}>
-                    <button type="button" className="plan-ride__suggest-row" onClick={() => selectPlace(loc)}>
-                      <span className="plan-ride__suggest-icon">
-                        <Clock className="size-4" />
-                      </span>
-                      <span className="min-w-0 flex-1 text-left">
-                        <span className="plan-ride__suggest-name">{loc.name}</span>
-                        <span className="plan-ride__suggest-addr">{loc.address || "Saved location"}</span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <div className="plan-ride__suggest-stack">
+                <div className="plan-ride__suggest-card">
+                  <p className="plan-ride__suggest-label">
+                    {searching ? "Searching map…" : "Map results"}
+                    {!searching && searchResults.length > 0 ? (
+                      <span className="plan-ride__suggest-count">{searchResults.length}</span>
+                    ) : null}
+                  </p>
+                  {searching && searchResults.length === 0 ? (
+                    <p className="plan-ride__empty plan-ride__empty--tight">Looking up places…</p>
+                  ) : searchResults.length === 0 ? (
+                    <p className="plan-ride__empty plan-ride__empty--tight">
+                      No map matches — try another spelling or set on map.
+                    </p>
+                  ) : (
+                    <ul className="plan-ride__suggest-list">
+                      {searchResults.map((result, i) => (
+                        <li key={`search-${result.lat}-${result.lon}-${i}`}>
+                          <button
+                            type="button"
+                            className="plan-ride__suggest-row"
+                            onClick={() => selectSearchResult(result)}
+                          >
+                            <span className="plan-ride__suggest-icon">
+                              <MapPin className="size-4" />
+                            </span>
+                            <span className="min-w-0 flex-1 text-left">
+                              <span className="plan-ride__suggest-name">
+                                {result.display_name.split(",")[0]?.trim() || result.display_name}
+                              </span>
+                              <span className="plan-ride__suggest-addr">{result.display_name}</span>
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="plan-ride__suggest-card">
+                  <p className="plan-ride__suggest-label">
+                    Saved places
+                    {savedSuggestions.length > 0 ? (
+                      <span className="plan-ride__suggest-count">{savedSuggestions.length}</span>
+                    ) : null}
+                  </p>
+                  {savedSuggestions.length === 0 ? (
+                    <p className="plan-ride__empty plan-ride__empty--tight">
+                      No saved match for “{filter.trim()}”.
+                    </p>
+                  ) : (
+                    <ul className="plan-ride__suggest-list">
+                      {savedSuggestions.map((loc) => (
+                        <li key={loc.id}>
+                          <button
+                            type="button"
+                            className="plan-ride__suggest-row"
+                            onClick={() => selectPlace(loc)}
+                          >
+                            <span className="plan-ride__suggest-icon plan-ride__suggest-icon--saved">
+                              <Star className="size-4" />
+                            </span>
+                            <span className="min-w-0 flex-1 text-left">
+                              <span className="plan-ride__suggest-name">{loc.name}</span>
+                              <span className="plan-ride__suggest-addr">
+                                {loc.address || "Saved location"}
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
             )}
           </section>
+          ) : null}
 
-          <div className="plan-ride__purpose">
-            <Input
-              value={purpose}
-              onChange={(e) => setPurpose(e.target.value)}
-              placeholder="Purpose (meeting, airport…)"
-              className="plan-ride__purpose-input"
-              required
-            />
-          </div>
+          <div className="plan-ride__actions">
+            <div className="plan-ride__purpose">
+              <Input
+                value={purpose}
+                onChange={(e) => setPurpose(e.target.value)}
+                placeholder="Purpose (meeting, airport…)"
+                className="plan-ride__purpose-input"
+                required
+              />
+            </div>
 
-          <div className="plan-ride__utils">
-            <button
-              type="button"
-              className="plan-ride__util plan-ride__util--map-mobile"
-              onClick={() => setMapOpen(true)}
-            >
-              <span className="plan-ride__util-icon">
-                <MapPin className="size-4" />
-              </span>
-              Preview route on map
-            </button>
-          </div>
+            {!isDesktop ? (
+              <div className="plan-ride__utils">
+                {focus ? (
+                  <button
+                    type="button"
+                    className="plan-ride__util"
+                    onClick={() => setMapPickerOpen(true)}
+                  >
+                    <span className="plan-ride__util-icon">
+                      <MapPin className="size-4" />
+                    </span>
+                    Set on map
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="plan-ride__util plan-ride__util--map-mobile"
+                  onClick={() => setMapOpen(true)}
+                >
+                  <span className="plan-ride__util-icon">
+                    <MapPin className="size-4" />
+                  </span>
+                  Preview route on map
+                </button>
+              </div>
+            ) : null}
 
-          <div className="plan-ride__footer">
-            <Button
-              type="button"
-              className="plan-ride__submit"
-              disabled={busy}
-              onClick={() => void submit()}
-            >
-              {busy ? "Submitting…" : "Request vehicle"}
-            </Button>
+            <div className="plan-ride__footer">
+              <Button
+                type="button"
+                className="plan-ride__submit"
+                disabled={busy}
+                onClick={() => void submit()}
+              >
+                {busy ? "Submitting…" : "Request vehicle"}
+              </Button>
+            </div>
           </div>
         </div>
 
         <aside className="plan-ride__aside">
           <section className="plan-ride__map-card" aria-label="Route preview">
-            <p className="plan-ride__aside-label">Route preview</p>
-            {routeMapPoints.length >= 1 ? (
-              <OsmRouteMap points={routeMapPoints} className="plan-ride__map-el" showSummary />
+            {isDesktop && mapPickerOpen ? (
+              <PlaceMapPicker
+                variant="panel"
+                open={mapPickerOpen}
+                onOpenChange={setMapPickerOpen}
+                title={mapPickerTitle()}
+                tone={mapPickerTone()}
+                initialLat={mapPickerSeed().lat}
+                initialLng={mapPickerSeed().lng}
+                onConfirm={confirmMapPick}
+              />
             ) : (
-              <p className="plan-ride__map-empty">Add pickup and Where to? to see the route.</p>
+              <>
+                <div className="plan-ride__map-card-head">
+                  <p className="plan-ride__aside-label">Route preview</p>
+                  {focus ? (
+                    <button
+                      type="button"
+                      className="plan-ride__map-pick"
+                      onClick={() => setMapPickerOpen(true)}
+                    >
+                      Set pin on map
+                    </button>
+                  ) : null}
+                </div>
+                <OsmRouteMap
+                  points={mapPreviewPoints}
+                  className="plan-ride__map-el"
+                  showSummary={!isSearching}
+                  drawRoute={!isSearching}
+                  emptyHint={
+                    isSearching
+                      ? searching
+                        ? "Searching places…"
+                        : "Tap a result to place it on the map"
+                      : "Add pickup and drop — or set a pin"
+                  }
+                />
+              </>
             )}
           </section>
         </aside>
       </div>
 
-      <Sheet open={timeOpen} onOpenChange={setTimeOpen}>
-        <SheetContent side="bottom" className="plan-ride-sheet rounded-t-2xl sm:max-w-lg">
-          <SheetHeader>
-            <SheetTitle>Pickup time</SheetTitle>
-          </SheetHeader>
-          <div className="mt-4 space-y-3">
-            <div className="plan-ride-sheet__time-row">
-              <Input
-                type="date"
-                value={pickupAt.slice(0, 10)}
-                onChange={(e) => {
-                  const date = e.target.value || pickupAt.slice(0, 10);
-                  const time = pickupAt.slice(11, 16) || "09:00";
-                  setPickupAt(`${date}T${time}`);
-                }}
-                className="plan-ride-sheet__input"
-                aria-label="Pickup date"
-              />
-              <Input
-                type="time"
-                value={pickupAt.slice(11, 16) || "09:00"}
-                onChange={(e) => {
-                  const date = pickupAt.slice(0, 10) || toLocalInput(new Date()).slice(0, 10);
-                  const time = e.target.value || "09:00";
-                  setPickupAt(`${date}T${time}`);
-                }}
-                className="plan-ride-sheet__input"
-                aria-label="Pickup time"
-              />
+      {!isDesktop ? (
+        <PlaceMapPicker
+          variant="sheet"
+          open={mapPickerOpen}
+          onOpenChange={setMapPickerOpen}
+          title={mapPickerTitle()}
+          tone={mapPickerTone()}
+          initialLat={mapPickerSeed().lat}
+          initialLng={mapPickerSeed().lng}
+          onConfirm={confirmMapPick}
+        />
+      ) : null}
+
+      {!isDesktop ? (
+        <>
+          <PlanRideChooser open={timeOpen} onOpenChange={setTimeOpen} title="Pickup time">
+            <div className="space-y-3">
+              <div className="plan-ride-sheet__time-row">
+                <Input
+                  type="date"
+                  value={pickupAt.slice(0, 10)}
+                  onChange={(e) => {
+                    const date = e.target.value || pickupAt.slice(0, 10);
+                    const time = pickupAt.slice(11, 16) || "09:00";
+                    setPickupAt(`${date}T${time}`);
+                  }}
+                  className="plan-ride-sheet__input"
+                  aria-label="Pickup date"
+                />
+                <Input
+                  type="time"
+                  value={pickupAt.slice(11, 16) || "09:00"}
+                  onChange={(e) => {
+                    const date = pickupAt.slice(0, 10) || toLocalInput(new Date()).slice(0, 10);
+                    const time = e.target.value || "09:00";
+                    setPickupAt(`${date}T${time}`);
+                  }}
+                  className="plan-ride-sheet__input"
+                  aria-label="Pickup time"
+                />
+              </div>
+              <Button type="button" className="w-full" onClick={() => setTimeOpen(false)}>
+                Done
+              </Button>
             </div>
-            <Button type="button" className="w-full" onClick={() => setTimeOpen(false)}>
-              Done
-            </Button>
-          </div>
-        </SheetContent>
-      </Sheet>
+          </PlanRideChooser>
 
-      <Sheet open={paxOpen} onOpenChange={setPaxOpen}>
-        <SheetContent side="bottom" className="plan-ride-sheet mx-auto max-w-lg rounded-t-2xl">
-          <SheetHeader>
-            <SheetTitle>Passengers</SheetTitle>
-          </SheetHeader>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {[1, 2, 3, 4, 5, 6, 8, 10, 12].map((n) => (
-              <button
-                key={n}
-                type="button"
-                className={cn("plan-ride-sheet__chip", passengerCount === n && "is-active")}
-                onClick={() => {
-                  setPassengerCount(n);
-                  setPaxOpen(false);
-                }}
-              >
-                {n}
-                {passengerCount === n ? <Check className="size-3.5" /> : null}
-              </button>
-            ))}
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      <Sheet open={tripOpen} onOpenChange={setTripOpen}>
-        <SheetContent side="bottom" className="plan-ride-sheet mx-auto max-w-lg rounded-t-2xl">
-          <SheetHeader>
-            <SheetTitle>Trip type</SheetTitle>
-          </SheetHeader>
-          <div className="mt-3 space-y-1">
-            {tripTypes.map((opt) => {
-              const active = tripCategory === opt.value_key;
-              return (
+          <PlanRideChooser open={paxOpen} onOpenChange={setPaxOpen} title="Passengers">
+            <div className="flex flex-wrap gap-2">
+              {[1, 2, 3, 4, 5, 6, 8, 10, 12].map((n) => (
                 <button
-                  key={opt.value_key}
+                  key={n}
                   type="button"
-                  className={cn("plan-ride-sheet__option", active && "is-active")}
+                  className={cn("plan-ride-sheet__chip", passengerCount === n && "is-active")}
                   onClick={() => {
-                    setTripCategory(opt.value_key);
-                    if (opt.value_key === "multi_stop" && stops.length === 0) {
-                      setStops([newStop()]);
-                      setFocus("stop-0");
-                    }
-                    if (opt.value_key !== "multi_stop") setStops([]);
-                    setTripOpen(false);
+                    setPassengerCount(n);
+                    setPaxOpen(false);
                   }}
                 >
-                  <span>{opt.label}</span>
-                  {active ? <Check className="size-4" /> : null}
+                  {n}
+                  {passengerCount === n ? <Check className="size-3.5" /> : null}
                 </button>
-              );
-            })}
-          </div>
-        </SheetContent>
-      </Sheet>
+              ))}
+            </div>
+          </PlanRideChooser>
 
-      <Sheet open={mapOpen} onOpenChange={setMapOpen}>
-        <SheetContent side="bottom" className="plan-ride-sheet mx-auto max-h-[85dvh] max-w-lg rounded-t-2xl">
-          <SheetHeader>
-            <SheetTitle>Route preview</SheetTitle>
-          </SheetHeader>
-          <div className="mt-3 overflow-hidden rounded-xl">
-            {routeMapPoints.length >= 1 ? (
-              <OsmRouteMap points={routeMapPoints} className="h-64 w-full" />
-            ) : (
-              <p className="p-4 text-sm text-muted-foreground">Add pickup and Where to? first.</p>
-            )}
-          </div>
-          <Button type="button" className="mt-3 w-full" onClick={() => setMapOpen(false)}>
-            Close
-          </Button>
-        </SheetContent>
-      </Sheet>
+          <PlanRideChooser open={tripOpen} onOpenChange={setTripOpen} title="Trip type">
+            <div className="space-y-1">
+              {tripTypes.map((opt) => {
+                const active = tripCategory === opt.value_key;
+                return (
+                  <button
+                    key={opt.value_key}
+                    type="button"
+                    className={cn("plan-ride-sheet__option", active && "is-active")}
+                    onClick={() => {
+                      setTripCategory(opt.value_key);
+                      if (opt.value_key === "multi_stop" && stops.length === 0) {
+                        setStops([newStop()]);
+                        setFocus("stop-0");
+                      }
+                      if (opt.value_key !== "multi_stop") setStops([]);
+                      setTripOpen(false);
+                    }}
+                  >
+                    <span>{opt.label}</span>
+                    {active ? <Check className="size-4" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </PlanRideChooser>
+
+          <PlanRideChooser open={mapOpen} onOpenChange={setMapOpen} title="Route preview" wide>
+            <div className="overflow-hidden rounded-xl border border-[var(--pr-border)]">
+              <OsmRouteMap
+                points={mapPreviewPoints}
+                className="h-64 w-full"
+                showSummary={!isSearching}
+                drawRoute={!isSearching}
+                emptyHint="Add pickup and Where to? — or search a place"
+              />
+            </div>
+            <Button type="button" className="mt-3 w-full" onClick={() => setMapOpen(false)}>
+              Close
+            </Button>
+          </PlanRideChooser>
+        </>
+      ) : null}
     </div>
   );
 }

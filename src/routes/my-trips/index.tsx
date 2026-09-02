@@ -1,11 +1,14 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { PanelSkeleton } from "@/components/loading-skeletons";
 import { AppShell } from "@/components/app-shell";
-import { DriverTripPreview } from "@/components/driver-trip-preview";
-import { EmptyState, Panel, MetaChip, ChipGroup } from "@/components/fleet-ui";
+import { TripListRow } from "@/components/info-blocks";
+import { DriverAssignmentCard } from "@/components/list-cards";
+import { EmptyState, Panel } from "@/components/fleet-ui";
 import { LookupChip } from "@/components/lookup-chip";
 import { useAuth } from "@/lib/auth";
+import { sortTripsList } from "@/lib/fleet";
 import { useI18n } from "@/lib/i18n";
+import { routeLine } from "@/lib/route-summary";
 import { useDriverTrips } from "@/lib/queries";
 
 export const Route = createFileRoute("/my-trips/")({
@@ -35,8 +38,9 @@ function MyTripsPage() {
     );
   }
 
-  const trips = (data ?? []).filter((row) => !["completed", "cancelled"].includes(row.status));
-  const past = (data ?? []).filter((row) => ["completed", "cancelled"].includes(row.status));
+  const sorted = sortTripsList(data ?? []);
+  const trips = sorted.filter((row) => !["completed", "cancelled"].includes(row.status));
+  const past = sorted.filter((row) => ["completed", "cancelled"].includes(row.status));
 
   return (
     <AppShell title={t("driver.trips.title")} subtitle={t("driver.trips.subtitle")}>
@@ -59,7 +63,7 @@ function MyTripsPage() {
             <ul className="space-y-2">
               {trips.map((trip, i) => (
                 <li key={trip.id}>
-                  <DriverTripPreview trip={trip} emphasize={i === 0} />
+                  <DriverAssignmentCard trip={trip} emphasize={i === 0} />
                 </li>
               ))}
             </ul>
@@ -71,16 +75,21 @@ function MyTripsPage() {
             <ul className="divide-y divide-border/60">
               {past.slice(0, 10).map((trip) => (
                 <li key={trip.id}>
-                  <Link
+                  <TripListRow
+                    when={trip.vehicle_requests?.pickup_at ?? trip.created_at}
+                    title={routeLine(trip.vehicle_requests?.request_route_points) ?? trip.reference}
+                    subtitle={
+                      [
+                        trip.vehicle_requests?.requester_name,
+                        trip.vehicles?.registration_number ?? trip.vehicles?.name,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || trip.reference
+                    }
+                    end={<LookupChip group="trip_status" value={trip.status} />}
                     to="/my-trips/$tripId"
                     params={{ tripId: trip.id }}
-                    className="role-dash-list-link flex items-center justify-between gap-3 transition-colors hover:bg-muted/40"
-                  >
-                    <ChipGroup>
-                      <MetaChip label={trip.reference} tone="primary" />
-                    </ChipGroup>
-                    <LookupChip group="trip_status" value={trip.status} />
-                  </Link>
+                  />
                 </li>
               ))}
             </ul>

@@ -2,15 +2,15 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { AdminRequestCard, EmployeeRequestCard } from "@/components/list-cards";
 import { RequestListSkeleton } from "@/components/loading-skeletons";
-import { LookupChip, LookupMetaChip } from "@/components/lookup-chip";
-import { EmptyState, FilterBar, ChipGroup, MetaChip, Panel } from "@/components/fleet-ui";
+import { EmptyState, FilterBar, Panel } from "@/components/fleet-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
+import { sortRequestsList } from "@/lib/fleet";
 import { useLookupOptions } from "@/lib/lookups-context";
 import { useRequests } from "@/lib/queries";
-import { formatDateTime, relativeTime } from "@/lib/fleet";
 
 export const Route = createFileRoute("/requests/")({
   head: () => ({
@@ -34,12 +34,15 @@ function RequestsPage() {
   const [search, setSearch] = useState("");
 
   const allRows = data ?? [];
-  const rows = allRows.filter((r) => {
-    if (filter !== "all" && r.status !== filter) return false;
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return `${r.reference} ${r.purpose} ${r.requester_name}`.toLowerCase().includes(q);
-  });
+  const rows = useMemo(() => {
+    const filtered = allRows.filter((r) => {
+      if (filter !== "all" && r.status !== filter) return false;
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return `${r.reference} ${r.purpose} ${r.requester_name}`.toLowerCase().includes(q);
+    });
+    return sortRequestsList(filtered);
+  }, [allRows, filter, search]);
 
   const filterOptions = useMemo(() => {
     const counts = Object.fromEntries(
@@ -92,34 +95,14 @@ function RequestsPage() {
             <EmptyState compact title="No requests match" description="Try a different filter or raise a new request." />
           </div>
         ) : (
-          <ul key={`${filter}-${search}`} className="list-stagger divide-y divide-border">
+          <ul key={`${filter}-${search}`} className="list-stagger space-y-2 p-3">
             {rows.map((r) => (
               <li key={r.id}>
-                <Link
-                  to="/requests/$requestId"
-                  params={{ requestId: r.id }}
-                  className="role-dash-list-link flex flex-col gap-1.5 transition-colors active:bg-accent/50 hover:bg-primary/5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">
-                      {r.reference} · {r.purpose}
-                    </p>
-                    <ChipGroup className="mt-1">
-                      <MetaChip label={r.requester_name} tone="info" />
-                      {r.departments?.code && <MetaChip label={r.departments.code} tone="neutral" />}
-                    </ChipGroup>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {formatDateTime(r.pickup_at)} · {relativeTime(r.pickup_at)}
-                    </p>
-                  </div>
-                  <ChipGroup>
-                    <LookupMetaChip group="trip_type" value={r.trip_type} />
-                    <MetaChip label={`${r.passenger_count} pax`} tone="neutral" />
-                    <LookupMetaChip group="vehicle_category" value={r.requested_category} fallback="Any category" />
-                    <LookupChip group="priority" value={r.priority} />
-                    <LookupChip group="request_status" value={r.status} />
-                  </ChipGroup>
-                </Link>
+                {isDispatcher ? (
+                  <AdminRequestCard request={r} />
+                ) : (
+                  <EmployeeRequestCard request={r} />
+                )}
               </li>
             ))}
           </ul>

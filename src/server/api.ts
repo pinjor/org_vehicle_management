@@ -11,6 +11,7 @@ import {
   type SessionUser,
 } from "./auth";
 import { normalizeBdPhone } from "@/lib/phone";
+import { clientDateTimeToIso } from "@/lib/fleet";
 import { CACHE_KEYS, cacheDel, withCache } from "./redis";
 
 type Variables = { user?: SessionUser };
@@ -32,7 +33,16 @@ const REQUEST_SELECT = `
     coalesce((
       select json_agg(t order by t.created_at)
       from trips t where t.request_id = vr.id
-    ), '[]'::json) as trips
+    ), '[]'::json) as trips,
+    coalesce((
+      select json_agg(json_build_object(
+        'name', rp.name,
+        'address', rp.address,
+        'point_type', rp.point_type,
+        'sequence', rp.sequence
+      ) order by rp.sequence)
+      from request_route_points rp where rp.request_id = vr.id
+    ), '[]'::json) as request_route_points
   from vehicle_requests vr
   left join departments dep on dep.id = vr.department_id
   left join vehicles v on v.id = vr.assigned_vehicle_id
@@ -364,9 +374,21 @@ app.get("/api/admin/employees/:id", async (c) => {
   );
   if (!profiles[0]) return c.json({ error: "Not found" }, 404);
   const { rows: requests } = await query(
-    `select id, reference, purpose, status, pickup_at, passenger_count
-     from vehicle_requests where requester_id = $1
-     order by pickup_at desc nulls last limit 12`,
+    `select vr.id, vr.reference, vr.purpose, vr.status, vr.pickup_at, vr.passenger_count,
+      case when v.id is not null then json_build_object(
+        'name', v.name, 'registration_number', v.registration_number
+      ) end as vehicles,
+      case when dr.id is not null then json_build_object(
+        'full_name', dr.full_name, 'phone', dr.phone
+      ) end as drivers
+     from vehicle_requests vr
+     left join vehicles v on v.id = vr.assigned_vehicle_id
+     left join drivers dr on dr.id = vr.assigned_driver_id
+     where vr.requester_id = $1
+     order by
+       case when vr.status in ('completed','cancelled','rejected') then 1 else 0 end,
+       coalesce(vr.created_at, vr.pickup_at) desc nulls last
+     limit 12`,
     [id],
   );
   return json(c, { profile: profiles[0], requests });
@@ -387,7 +409,9 @@ app.get("/api/requests", async (c) => {
     params.push(requesterId);
     sql += ` and vr.requester_id = $${params.length}`;
   }
-  sql += ` order by vr.pickup_at asc`;
+  sql += ` order by
+    case when vr.status in ('completed','cancelled','rejected') then 1 else 0 end,
+    coalesce(vr.created_at, vr.pickup_at) desc nulls last`;
   const { rows } = await query(sql, params);
   return json(c, rows);
 });
@@ -408,6 +432,20 @@ app.get("/api/requests/:id", async (c) => {
 app.post("/api/requests", async (c) => {
   const user = requireUser(c);
   const input = await c.req.json<Record<string, unknown>>();
+  const pickupRaw = String(input.pickupAt ?? "");
+  const pickupIso = clientDateTimeToIso(pickupRaw);
+  const expectedEndIso = clientDateTimeToIso(String(input.expectedEndAt ?? ""));
+  // Prefer wall-clock calendar day from naive local input; else Dhaka day of instant.
+  const journeyDate =
+    (typeof input.journeyDate === "string" && input.journeyDate.slice(0, 10)) ||
+    (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(pickupRaw) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(pickupRaw)
+      ? pickupRaw.slice(0, 10)
+      : new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Dhaka",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(new Date(pickupIso)));
   const { rows } = await query<{ id: string; reference: string }>(
     `insert into vehicle_requests (
       requester_id, requester_name, requester_phone, department_id, cost_center, purpose,
@@ -427,12 +465,12 @@ app.post("/api/requests", async (c) => {
       input.priority,
       input.requestedCategory,
       input.passengerCount,
-      String(input.pickupAt).slice(0, 10),
-      new Date(String(input.pickupAt)).toISOString(),
-      new Date(String(input.expectedEndAt)).toISOString(),
+      journeyDate,
+      pickupIso,
+      expectedEndIso,
       input.isRoundTrip,
-      input.returnPickupAt ? new Date(String(input.returnPickupAt)).toISOString() : null,
-      input.returnExpectedEndAt ? new Date(String(input.returnExpectedEndAt)).toISOString() : null,
+      input.returnPickupAt ? clientDateTimeToIso(String(input.returnPickupAt)) : null,
+      input.returnExpectedEndAt ? clientDateTimeToIso(String(input.returnExpectedEndAt)) : null,
       input.requiresAc,
       input.specialRequirements,
       input.remarks,
@@ -547,14 +585,26 @@ app.get("/api/trips", async (c) => {
       json_build_object('full_name', d.full_name, 'phone', d.phone) as drivers,
       json_build_object(
         'id', vr.id, 'reference', vr.reference, 'purpose', vr.purpose,
-        'pickup_at', vr.pickup_at, 'requester_name', vr.requester_name
+        'pickup_at', vr.pickup_at, 'requester_name', vr.requester_name,
+        'requester_phone', vr.requester_phone, 'passenger_count', vr.passenger_count,
+        'request_route_points', coalesce((
+          select json_agg(json_build_object(
+            'name', rp.name,
+            'address', rp.address,
+            'point_type', rp.point_type,
+            'sequence', rp.sequence
+          ) order by rp.sequence)
+          from request_route_points rp where rp.request_id = vr.id
+        ), '[]'::json)
       ) as vehicle_requests
     from trips t
     join vehicles v on v.id = t.vehicle_id
     join drivers d on d.id = t.driver_id
     join vehicle_requests vr on vr.id = t.request_id
     where ${whereSql}
-    order by coalesce(t.completed_at, t.created_at) desc
+    order by
+      case when t.status in ('completed','cancelled','breakdown') then 1 else 0 end,
+      coalesce(t.completed_at, t.created_at) desc
     limit $1
   `,
     [limit],
@@ -568,11 +618,23 @@ app.get("/api/trips/active", async (c) => {
     select t.*,
       json_build_object('name', v.name, 'registration_number', v.registration_number) as vehicles,
       json_build_object('full_name', d.full_name, 'phone', d.phone) as drivers,
-      row_to_json(vr.*) as vehicle_requests
+      (
+        select row_to_json(rq) from (
+          select vr.*,
+            coalesce((
+              select json_agg(rp order by rp.sequence)
+              from request_route_points rp where rp.request_id = vr.id
+            ), '[]') as request_route_points,
+            coalesce((
+              select json_agg(rpass order by rpass.is_primary desc, rpass.full_name)
+              from request_passengers rpass where rpass.request_id = vr.id
+            ), '[]') as request_passengers
+          from vehicle_requests vr where vr.id = t.request_id
+        ) rq
+      ) as vehicle_requests
     from trips t
     join vehicles v on v.id = t.vehicle_id
     join drivers d on d.id = t.driver_id
-    join vehicle_requests vr on vr.id = t.request_id
     where t.status not in ('completed','cancelled')
     order by t.created_at desc
   `);
@@ -596,7 +658,9 @@ app.get("/api/trips/driver/:driverId", async (c) => {
     from trips t
     join vehicles v on v.id = t.vehicle_id
     where t.driver_id = $1
-    order by t.created_at desc
+    order by
+      case when t.status in ('completed','cancelled','breakdown') then 1 else 0 end,
+      t.created_at desc
   `, [driverId]);
   return json(c, rows);
 });
@@ -610,14 +674,16 @@ app.get("/api/trips/vehicle/:vehicleId", async (c) => {
       json_build_object('full_name', d.full_name, 'phone', d.phone, 'driver_code', d.driver_code) as drivers,
       (
         select row_to_json(rq) from (
-          select vr.id, vr.reference, vr.purpose, vr.pickup_at
+          select vr.id, vr.reference, vr.purpose, vr.pickup_at, vr.requester_name, vr.requester_phone, vr.passenger_count
           from vehicle_requests vr where vr.id = t.request_id
         ) rq
       ) as vehicle_requests
     from trips t
     join drivers d on d.id = t.driver_id
     where t.vehicle_id = $1
-    order by t.created_at desc
+    order by
+      case when t.status in ('completed','cancelled','breakdown') then 1 else 0 end,
+      t.created_at desc
   `,
     [vehicleId],
   );
@@ -1121,6 +1187,47 @@ app.post("/api/drivers", async (c) => {
   } finally {
     client.release();
   }
+});
+
+// ——— Geocoding (Nominatim proxy — avoids browser CORS / rate limits) ———
+const NOMINATIM_UA = "FleetOps/1.0 (org-vehicle-management)";
+
+app.get("/api/geocode/search", async (c) => {
+  requireUser(c);
+  const q = c.req.query("q")?.trim() ?? "";
+  const limit = Math.min(8, Math.max(1, Number(c.req.query("limit") ?? 6) || 6));
+  if (q.length < 2) return json(c, []);
+
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("q", q);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("countrycodes", "bd");
+
+  const res = await fetch(url.toString(), {
+    headers: { Accept: "application/json", "User-Agent": NOMINATIM_UA },
+  });
+  if (!res.ok) return json(c, []);
+  return json(c, await res.json());
+});
+
+app.get("/api/geocode/reverse", async (c) => {
+  requireUser(c);
+  const lat = Number(c.req.query("lat"));
+  const lng = Number(c.req.query("lng"));
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json(c, { display_name: null });
+
+  const url = new URL("https://nominatim.openstreetmap.org/reverse");
+  url.searchParams.set("lat", String(lat));
+  url.searchParams.set("lon", String(lng));
+  url.searchParams.set("format", "json");
+
+  const res = await fetch(url.toString(), {
+    headers: { Accept: "application/json", "User-Agent": NOMINATIM_UA },
+  });
+  if (!res.ok) return json(c, { display_name: null });
+  const data = (await res.json()) as { display_name?: string };
+  return json(c, { display_name: data.display_name ?? null });
 });
 
 // ——— Reference data ———

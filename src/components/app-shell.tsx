@@ -26,6 +26,7 @@ import { WorkspaceSkeleton } from "@/components/loading-skeletons";
 import { AppIcon } from "@/components/app-icon";
 import { LanguageToggle } from "@/components/language-toggle";
 import { useAuth } from "@/lib/auth";
+import { relativeTime } from "@/lib/fleet";
 import { useI18n } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotifications } from "@/lib/queries";
@@ -34,8 +35,17 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { relativeTime } from "@/lib/fleet";
 import { formatBdPhone } from "@/lib/phone";
+
+type AppNotification = {
+  id: string;
+  title: string;
+  body: string;
+  link?: string | null;
+  is_read: boolean;
+  created_at: string;
+  category?: string | null;
+};
 
 type NavItem = {
   to:
@@ -72,8 +82,8 @@ const NAV: NavItem[] = [
     roles: "all",
     section: "main",
   },
-  { to: "/requests", label: "My requests", shortLabel: "Activity", icon: ClipboardList, roles: "employee", section: "main" },
-  { to: "/requests/new", label: "New request", shortLabel: "New", icon: RouteIcon, roles: "employee", section: "main" },
+  { to: "/requests", label: "My rides", shortLabel: "Rides", icon: ClipboardList, roles: "employee", section: "main" },
+  { to: "/requests/new", label: "Book", shortLabel: "Book", icon: RouteIcon, roles: "employee", section: "main" },
   { to: "/profile", label: "Account", shortLabel: "Account", icon: User, roles: "employee", section: "main" },
   {
     to: "/my-trips",
@@ -90,7 +100,7 @@ const NAV: NavItem[] = [
   { to: "/fleet", label: "Fleet", icon: Car, roles: "dispatch", section: "ops" },
   { to: "/drivers", label: "Drivers", icon: Users, roles: "dispatch", section: "ops" },
   { to: "/maintenance", label: "Maintenance", shortLabel: "Maint.", icon: Wrench, roles: "dispatch", section: "ops" },
-  { to: "/admin/users", label: "User roster", shortLabel: "Roster", icon: Shield, roles: "admin", section: "admin" },
+  { to: "/admin/users", label: "Users", shortLabel: "Users", icon: Shield, roles: "admin", section: "admin" },
   { to: "/admin/employees", label: "Employees", shortLabel: "Staff", icon: Briefcase, roles: "dispatch", section: "admin" },
   { to: "/admin/settings", label: "Settings", shortLabel: "Settings", icon: Settings2, roles: "dispatch", section: "admin" },
 ];
@@ -250,7 +260,8 @@ export function AppShell({
   const navigate = useNavigate();
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { data: notifications } = useNotifications(user?.id);
+  const { data: notificationsRaw } = useNotifications(user?.id);
+  const notifications = (notificationsRaw ?? []) as AppNotification[];
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -329,13 +340,19 @@ export function AppShell({
 
   const activeNav = useMemo(() => resolveActiveNav(pathname, navCandidates), [pathname, navCandidates]);
 
-  const unread = (notifications ?? []).filter((n) => !n.is_read).length;
+  const unread = notifications.filter((n) => !n.is_read).length;
   const displayPhone = profile?.phone;
   /** Mobile portal (employee / driver): bottom nav only — no hamburger / sheet. Desktop keeps sidebar. */
   const hideMobileSidebar = (isEmployee || isDriver) && !isDispatcher && !isAdmin;
   const employeeRideChrome = isEmployee && !isDispatcher && !isAdmin;
+  const isPlanRidePage = pathname === "/requests/new";
+  /** Pages that draw their own top bar (plan-ride__top / driver trip). Admin request detail uses shell header. */
+  const isSelfTitledRidePage =
+    isPlanRidePage ||
+    (employeeRideChrome && /^\/requests\/[^/]+$/.test(pathname)) ||
+    /^\/my-trips\/[^/]+$/.test(pathname);
   const hideMobileShellHeader =
-    pathname === "/requests/new" ||
+    isSelfTitledRidePage ||
     (employeeRideChrome && (pathname === "/dashboard" || pathname === "/"));
 
   if (loading) return <WorkspaceSkeleton />;
@@ -349,6 +366,7 @@ export function AppShell({
         hideMobileSidebar && "employee-portal",
         employeeRideChrome && "employee-portal--ride",
         hideMobileShellHeader && "app-shell--no-mobile-header",
+        isSelfTitledRidePage && "app-shell--plan-ride",
       )}
     >
       {isDispatcher && <AdminRequestAlert />}
@@ -365,7 +383,7 @@ export function AppShell({
             <div className="app-sidebar-brand-text">
               <p className="truncate text-sm font-bold tracking-tight">FleetOps</p>
               <p className="truncate text-[11px] text-sidebar-foreground/55">
-                {isDriverPortal ? t("shell.vehicleMgmt") : "Vehicle management"}
+                {isDriverPortal ? t("shell.vehicleMgmt") : "FleetOps"}
               </p>
             </div>
           )}
@@ -408,18 +426,14 @@ export function AppShell({
 
       <div
         className={cn(
-          "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip",
+          "app-shell-main flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip",
           fillViewport && "lg:h-svh lg:max-h-svh lg:overflow-hidden",
         )}
       >
         <header
           className={cn(
-            "app-page-header sticky top-0 z-20 items-center gap-x-2",
-            employeeRideChrome
-              ? "app-page-header--ride"
-              : hideMobileSidebar
-                ? "flex flex-nowrap justify-between gap-y-0"
-                : "flex flex-wrap justify-between gap-y-2 gap-x-3",
+            "app-page-header sticky top-0 z-20 flex flex-nowrap items-center justify-between gap-x-2",
+            employeeRideChrome && "app-page-header--ride",
           )}
         >
           {employeeRideChrome ? null : (
@@ -467,7 +481,7 @@ export function AppShell({
             className={cn(
               "flex shrink-0 items-center justify-end gap-1.5 sm:gap-2",
               employeeRideChrome && "ride-header-actions",
-              !employeeRideChrome && !hideMobileSidebar && "w-full flex-wrap sm:ml-auto sm:w-auto",
+              !employeeRideChrome && "ml-auto",
             )}
           >
             {actions}
@@ -481,7 +495,7 @@ export function AppShell({
                     "size-8 sm:hidden",
                     activeNav === "/requests" && "border-primary/40 bg-primary/8 text-primary",
                   )}
-                  tooltip="My requests"
+                  tooltip="My rides"
                 >
                   <Link to="/requests">
                     <ClipboardList className="size-4" />
@@ -495,11 +509,11 @@ export function AppShell({
                     "hidden h-8 gap-1.5 px-2.5 sm:inline-flex",
                     activeNav === "/requests" && "border-primary/40 bg-primary/8 text-primary",
                   )}
-                  tooltip="View your submitted vehicle requests"
+                  tooltip="My rides"
                 >
                   <Link to="/requests">
                     <ClipboardList className="size-3.5 shrink-0" />
-                    <span className="text-xs">My requests</span>
+                    <span className="text-xs">My rides</span>
                   </Link>
                 </Button>
                 <Button
@@ -509,11 +523,11 @@ export function AppShell({
                     "h-8 gap-1 px-2",
                     activeNav === "/requests/new" && "ring-2 ring-primary/30",
                   )}
-                  tooltip="Create a new vehicle request"
+                  tooltip="Book a ride"
                 >
                   <Link to="/requests/new">
                     <Plus className="size-3.5 shrink-0" />
-                    <span className="hidden text-xs sm:inline">New request</span>
+                    <span className="hidden text-xs sm:inline">Book</span>
                   </Link>
                 </Button>
               </>
@@ -523,7 +537,7 @@ export function AppShell({
                 <Button
                   variant="outline"
                   size="icon"
-                  className="relative size-8"
+                  className={cn("notif-bell relative size-8", unread > 0 && "notif-bell--hot")}
                   aria-label={isDriverPortal ? t("shell.notifications") : "Notifications"}
                   tooltip={
                     unread > 0
@@ -535,7 +549,7 @@ export function AppShell({
                 >
                   <Bell className="size-4" />
                   {unread > 0 && (
-                    <span className="absolute -top-1 -right-1 grid size-4 place-items-center rounded-full bg-destructive text-[10px] font-semibold text-destructive-foreground">
+                    <span className="notif-bell__badge" aria-hidden>
                       {unread > 9 ? "9+" : unread}
                     </span>
                   )}
@@ -544,20 +558,29 @@ export function AppShell({
               <PopoverContent
                 align="end"
                 side="bottom"
-                sideOffset={6}
+                sideOffset={8}
                 collisionPadding={12}
-                className="w-[min(100vw-1.5rem,20rem)] max-h-[min(60dvh,18rem)] overflow-hidden p-0 sm:w-80"
+                className="notif-panel p-0"
               >
-                <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-                  <p className="text-xs font-semibold">
-                    {isDriverPortal ? t("shell.notifications") : "Notifications"}
-                  </p>
-                  {unread > 0 && (
+                <div className="notif-panel__head">
+                  <div className="min-w-0">
+                    <p className="notif-panel__title">
+                      {isDriverPortal ? t("shell.notifications") : "Notifications"}
+                    </p>
+                    <p className="notif-panel__sub">
+                      {unread > 0
+                        ? `${unread} unread`
+                        : isDriverPortal
+                          ? t("shell.nothingNew")
+                          : "You're all caught up"}
+                    </p>
+                  </div>
+                  {unread > 0 ? (
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-7 shrink-0 px-2 text-[11px]"
+                      className="notif-panel__mark-all"
                       disabled={markAllRead.isPending}
                       tooltip={
                         isDriverPortal ? t("shell.markAllRead") : "Mark all notifications as read"
@@ -566,56 +589,67 @@ export function AppShell({
                     >
                       {isDriverPortal ? t("shell.markAllRead") : "Mark all read"}
                     </Button>
-                  )}
+                  ) : null}
                 </div>
-                <div className="max-h-[min(60vh,18rem)] divide-y divide-border overflow-y-auto">
-                  {(notifications ?? []).length === 0 && (
-                    <p className="px-3 py-4 text-center text-xs text-muted-foreground">
-                      {isDriverPortal ? t("shell.nothingNew") : "Nothing new."}
-                    </p>
-                  )}
-                  {(notifications ?? []).map((n) => (
-                    <div
-                      key={n.id}
-                      className={cn(
-                        "flex gap-2 px-3 py-2 transition-colors",
-                        n.is_read ? "opacity-70" : "bg-surface-2",
-                      )}
-                    >
-                      <button
-                        type="button"
-                        className="min-w-0 flex-1 text-left hover:opacity-90"
-                        onClick={() => {
-                          if (!n.is_read) void markRead.mutateAsync(n.id);
-                          if (n.link) window.location.href = n.link;
-                        }}
-                      >
-                        <p className="text-sm font-medium">{n.title}</p>
-                        <p className="text-xs text-muted-foreground">{n.body}</p>
-                        <p className="mt-1 text-[11px] text-muted-foreground">
-                          {relativeTime(n.created_at)}
-                        </p>
-                      </button>
-                      {!n.is_read && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-7 shrink-0 self-start px-2 text-[11px]"
-                          disabled={markRead.isPending}
-                          tooltip={
-                            isDriverPortal ? t("shell.markRead") : "Mark this notification as read"
-                          }
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void markRead.mutateAsync(n.id);
-                          }}
-                        >
-                          {isDriverPortal ? t("shell.markRead") : "Read"}
-                        </Button>
-                      )}
+
+                <div className="notif-panel__list">
+                  {notifications.length === 0 ? (
+                    <div className="notif-panel__empty">
+                      <span className="notif-panel__empty-icon" aria-hidden>
+                        <Bell className="size-5" />
+                      </span>
+                      <p className="notif-panel__empty-title">
+                        {isDriverPortal ? t("shell.nothingNew") : "No notifications"}
+                      </p>
+                      <p className="notif-panel__empty-desc">
+                        Trip updates and assignments show here.
+                      </p>
                     </div>
-                  ))}
+                  ) : (
+                    <ul className="notif-panel__ul">
+                      {notifications.map((n) => {
+                        const rel = relativeTime(n.created_at);
+                        return (
+                          <li key={n.id}>
+                            <button
+                              type="button"
+                              className={cn(
+                                "notif-item",
+                                n.is_read ? "notif-item--read" : "notif-item--unread",
+                              )}
+                              onClick={() => {
+                                if (!n.is_read) void markRead.mutateAsync(n.id);
+                                if (n.link?.startsWith("/")) {
+                                  router.history.push(n.link);
+                                } else if (n.link) {
+                                  window.location.href = n.link;
+                                }
+                              }}
+                            >
+                              <span
+                                className="notif-item__dot"
+                                aria-hidden
+                                data-unread={!n.is_read || undefined}
+                              />
+                              <span className="notif-item__body min-w-0">
+                                <span className="notif-item__top">
+                                  <span className="notif-item__title">{n.title}</span>
+                                  {rel ? (
+                                    <time className="notif-item__when" dateTime={n.created_at}>
+                                      {rel}
+                                    </time>
+                                  ) : null}
+                                </span>
+                                {n.body ? (
+                                  <span className="notif-item__text">{n.body}</span>
+                                ) : null}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </div>
               </PopoverContent>
             </Popover>

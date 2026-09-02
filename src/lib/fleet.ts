@@ -76,6 +76,61 @@ export const PRIORITY: Record<string, { label: string; tone: Tone }> = {
   vip: { label: "VIP", tone: "primary" },
 };
 
+/** Lower = handle first (emergency before normal). */
+const PRIORITY_RANK: Record<string, number> = {
+  emergency: 0,
+  vip: 1,
+  high: 2,
+  important: 3,
+  normal: 4,
+};
+
+/** Dispatch queue: priority → soonest pickup → oldest created. */
+export function sortDispatchQueue<
+  T extends { priority?: string; pickup_at?: string; created_at: string },
+>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const pa = PRIORITY_RANK[a.priority ?? "normal"] ?? 9;
+    const pb = PRIORITY_RANK[b.priority ?? "normal"] ?? 9;
+    if (pa !== pb) return pa - pb;
+    const ta = new Date(a.pickup_at ?? a.created_at).getTime();
+    const tb = new Date(b.pickup_at ?? b.created_at).getTime();
+    if (ta !== tb) return ta - tb;
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
+}
+
+const CLOSED_REQUEST = new Set(["completed", "cancelled", "rejected"]);
+const CLOSED_TRIP = new Set(["completed", "cancelled", "breakdown"]);
+
+/** All-requests / history lists: open first, closed last; newest first inside each. */
+export function sortRequestsList<
+  T extends { status: string; pickup_at?: string | null; created_at: string },
+>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const pa = CLOSED_REQUEST.has(a.status) ? 1 : 0;
+    const pb = CLOSED_REQUEST.has(b.status) ? 1 : 0;
+    if (pa !== pb) return pa - pb;
+    const ta = new Date(a.created_at || a.pickup_at || 0).getTime();
+    const tb = new Date(b.created_at || b.pickup_at || 0).getTime();
+    return tb - ta;
+  });
+}
+
+/** Trip lists: active first, done last; newest first inside each. */
+export function sortTripsList<
+  T extends { status: string; created_at: string; completed_at?: string | null },
+>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const pa = CLOSED_TRIP.has(a.status) ? 1 : 0;
+    const pb = CLOSED_TRIP.has(b.status) ? 1 : 0;
+    if (pa !== pb) return pa - pb;
+    const ta = new Date(a.completed_at || a.created_at).getTime();
+    const tb = new Date(b.completed_at || b.created_at).getTime();
+    return tb - ta;
+  });
+}
+
 export const TRIP_TYPE: Record<string, { label: string; tone: Tone }> = {
   one_way: { label: "One-way", tone: "info" },
   round_trip: { label: "Round trip", tone: "primary" },
@@ -288,7 +343,11 @@ export function nextDriverActions(
 
 export function formatTime(value?: string | null) {
   if (!value) return "—";
-  return new Date(value).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return new Date(value).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
 export function formatDate(value?: string | null) {
@@ -326,6 +385,42 @@ export function durationBetween(from: string, to: string) {
 export function toLocalInput(value: Date) {
   const tz = value.getTimezoneOffset() * 60000;
   return new Date(value.getTime() - tz).toISOString().slice(0, 16);
+}
+
+/**
+ * Convert a datetime-local wall clock (`YYYY-MM-DDTHH:mm`) to a real UTC ISO
+ * using the browser's local timezone. Avoids Docker/UTC servers treating the
+ * naive string as UTC (which shifts Asia/Dhaka by +6h).
+ */
+export function localInputToIso(local: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(local.trim());
+  if (m) {
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    const h = Number(m[4]);
+    const mi = Number(m[5]);
+    return new Date(y, mo - 1, d, h, mi, 0, 0).toISOString();
+  }
+  const parsed = new Date(local);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`Invalid datetime: ${local}`);
+  }
+  return parsed.toISOString();
+}
+
+/** Parse client datetime — ISO with offset, or naive → Asia/Dhaka wall clock. */
+export function clientDateTimeToIso(value: string): string {
+  const s = String(value).trim();
+  if (/[zZ]$/.test(s) || /[+-]\d{2}:\d{2}$/.test(s) || /[+-]\d{4}$/.test(s)) {
+    return new Date(s).toISOString();
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(s);
+  if (m) {
+    // Bangladesh has no DST; naive booking times are Dhaka wall clock.
+    return new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:00+06:00`).toISOString();
+  }
+  return new Date(s).toISOString();
 }
 
 /** Human explanation of a recommendation score returned by the matching engine. */

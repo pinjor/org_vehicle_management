@@ -39,16 +39,18 @@ function DriverTripDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="plan-ride ride-detail ride-detail--driver">
-        <header className="plan-ride__top">
-          <Link to="/my-trips" className="plan-ride__back" aria-label={t("driver.detail.back")}>
-            <ArrowLeft className="size-5" />
-          </Link>
-          <h1 className="plan-ride__title">{t("driver.trips.title")}</h1>
-          <span className="plan-ride__top-spacer" aria-hidden />
-        </header>
-        <DetailPageSkeleton />
-      </div>
+      <AppShell title={t("driver.trips.title")} subtitle={t("driver.detail.shellSub")}>
+        <div className="plan-ride ride-detail ride-detail--driver">
+          <header className="plan-ride__top">
+            <Link to="/my-trips" className="plan-ride__back" aria-label={t("driver.detail.back")}>
+              <ArrowLeft className="size-5" />
+            </Link>
+            <h1 className="plan-ride__title">{t("driver.trips.title")}</h1>
+            <span className="plan-ride__top-spacer" aria-hidden />
+          </header>
+          <DetailPageSkeleton />
+        </div>
+      </AppShell>
     );
   }
 
@@ -56,25 +58,27 @@ function DriverTripDetailPage() {
 
   if (!trip) {
     return (
-      <div className="plan-ride ride-detail ride-detail--driver">
-        <header className="plan-ride__top">
-          <Link to="/my-trips" className="plan-ride__back" aria-label={t("driver.detail.back")}>
-            <ArrowLeft className="size-5" />
-          </Link>
-          <h1 className="plan-ride__title">{t("driver.trips.title")}</h1>
-          <span className="plan-ride__top-spacer" aria-hidden />
-        </header>
-        <EmptyState
-          compact
-          title={t("driver.detail.notFoundTitle")}
-          description={t("driver.detail.notFoundDesc")}
-          action={
-            <Button asChild variant="outline" size="sm">
-              <Link to="/my-trips">{t("driver.detail.back")}</Link>
-            </Button>
-          }
-        />
-      </div>
+      <AppShell title={t("driver.trips.title")} subtitle={t("driver.detail.shellSub")}>
+        <div className="plan-ride ride-detail ride-detail--driver">
+          <header className="plan-ride__top">
+            <Link to="/my-trips" className="plan-ride__back" aria-label={t("driver.detail.back")}>
+              <ArrowLeft className="size-5" />
+            </Link>
+            <h1 className="plan-ride__title">{t("driver.trips.title")}</h1>
+            <span className="plan-ride__top-spacer" aria-hidden />
+          </header>
+          <EmptyState
+            compact
+            title={t("driver.detail.notFoundTitle")}
+            description={t("driver.detail.notFoundDesc")}
+            action={
+              <Button asChild variant="outline" size="sm">
+                <Link to="/my-trips">{t("driver.detail.back")}</Link>
+              </Button>
+            }
+          />
+        </div>
+      </AppShell>
     );
   }
 
@@ -83,5 +87,9 @@ function DriverTripDetailPage() {
     return <Navigate to="/requests/$requestId" params={{ requestId }} />;
   }
 
-  return <DriverTripPanel trip={trip} />;
+  return (
+    <AppShell title={t("driver.trips.title")} subtitle={t("driver.detail.shellSub")}>
+      <DriverTripPanel trip={trip} />
+    </AppShell>
+  );
 }

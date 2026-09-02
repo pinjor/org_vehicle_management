@@ -1,0 +1,42 @@
+---
+description: Info hierarchy for trip/request surfaces — role priority, when first, both parties when useful
+alwaysApply: true
+---
+
+# Info hierarchy (FleetOps)
+
+Keep the card **attitude**: `WhenRail` left, route timeline, status badges top-right, tiny reference footer. Change **what** is highlighted by role — not the layout language.
+
+## Shared order
+
+1. **When** — `WhenRail` / `WhenBanner` / `WhenStamp` (12h). Never bury pickup in muted meta.
+2. **People who matter for this viewer** — name + tappable phone.
+3. **Route** — `RouteTimeline` (pickup ● → drop ○).
+4. **Facts** — pax, plate, purpose (muted).
+5. **Status / priority** — badges top-right.
+6. **Reference** — tiny footer.
+
+## Role priority (lists / cards)
+
+| Surface | Primary who | Also show |
+|--------|-------------|-----------|
+| Driver trip card | Passenger + phone | Route, pax, plate |
+| Employee request (assigned) | Driver + phone | Purpose, route, plate, pax |
+| Employee request (waiting) | Purpose | Route, pax, “Awaiting dispatch” |
+| Admin request (unassigned) | Employee + phone | Priority, route, pax, purpose |
+| Admin request (assigned) | Employee \| Driver parties + phones | Route, pax, plate, purpose |
+| Admin live/completed trip | Employee \| Driver parties + phones | Route, pax, plate, purpose |
+| Nested history rows | Context person (employee or driver) | Other party · plate · ref |
+
+## Do
+
+- Reuse `list-cards.tsx` (`DriverAssignmentCard`, `EmployeeRequestCard`, `AdminRequestCard`, `LiveTripCard`).
+- Reuse `TripListRow` for compact history; put useful dual context in title/subtitle.
+- Both employee and driver when the viewer is admin/dispatch on an assigned trip.
+
+## Don’t
+
+- Don’t flip-flop title between employee OR driver for admin trips — show **both**.
+- Don’t demote phones into mute chips when the viewer needs to call.
+- Don’t invent a third time format.
+---

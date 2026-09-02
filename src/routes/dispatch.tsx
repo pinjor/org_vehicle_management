@@ -1,14 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Car, Clock, Radar, Route as RouteIcon, Wrench } from "lucide-react";
+import { Car, Clock, Radar, Users, Wrench } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { AdminRequestCard, LiveTripCard } from "@/components/list-cards";
 import { LookupChip, LookupMetaChip } from "@/components/lookup-chip";
-import { ChipGroup, EmptyState, KpiCard, KpiGrid, MetaChip, Panel } from "@/components/fleet-ui";
+import { ChipGroup, EmptyState, KpiCard, MetaChip, Panel } from "@/components/fleet-ui";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
-import { useActiveTrips, useDecideRequest, useRequests, useVehicles } from "@/lib/queries";
-import { formatDateTime, relativeTime } from "@/lib/fleet";
+import { sortDispatchQueue, sortTripsList } from "@/lib/fleet";
+import { useActiveTrips, useDecideRequest, useDrivers, useRequests, useVehicles } from "@/lib/queries";
+import { cn } from "@/lib/utils";
 
 const DISPATCH_UI_KEY = "fleetops.dispatch.ui";
 
@@ -19,12 +21,6 @@ const DEFAULT_COLLAPSED: DispatchSections = {
   queue: false,
   vehicles: false,
   trips: false,
-};
-
-const DISPATCH_SECTION_ORDER: DispatchSectionId[] = ["queue", "vehicles", "trips"];
-
-type SectionOptions = {
-  scrollBody?: boolean;
 };
 
 export const Route = createFileRoute("/dispatch")({
@@ -46,8 +42,11 @@ function DispatchPage() {
   const { data } = useRequests();
   const trips = useActiveTrips();
   const vehicles = useVehicles();
+  const drivers = useDrivers();
   const decide = useDecideRequest();
-  const queue = (data ?? []).filter((r) => ["submitted", "approved"].includes(r.status));
+  const queue = sortDispatchQueue(
+    (data ?? []).filter((r) => ["submitted", "approved"].includes(r.status)),
+  );
 
   const [collapsed, setCollapsedState] = useState<DispatchSections>(() => {
     try {
@@ -78,77 +77,63 @@ function DispatchPage() {
   const downVehicles = fleet.filter((v) =>
     ["under_maintenance", "unavailable", "out_of_service"].includes(v.operational_status),
   );
-
-  const queueDescription = collapsed.queue
-    ? `${queue.length} pending · click to expand`
-    : "Open a request to review and assign";
+  const availableDrivers = (drivers.data ?? []).filter((d) => d.current_status === "available");
+  const liveTrips = sortTripsList(trips.data ?? []);
 
   const queueBody =
     queue.length === 0 ? (
-      <EmptyState flush title="No pending requests" description="New employee requests will pop up here." />
+      <EmptyState flush title="Nothing pending" description="New requests show here." />
     ) : (
-      <ul className="divide-y divide-border/60">
-        {[...queue]
-          .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-          .map((r) => {
-            const canReject = !!user && r.status === "submitted";
-            return (
-              <li key={r.id} className="relative">
-                <Link
-                  to="/requests/$requestId"
-                  params={{ requestId: r.id }}
-                  className={cnQueueItem(canReject)}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-medium">{r.reference}</p>
-                    <LookupChip group="priority" value={r.priority} />
-                  </div>
-                  <p className="truncate text-xs text-muted-foreground">{r.requester_name}</p>
-                  <ChipGroup className="mt-1.5">
-                    <LookupChip group="request_status" value={r.status} />
-                    <LookupMetaChip group="trip_type" value={r.trip_type} />
-                    <MetaChip label={`${r.passenger_count} pax`} tone="neutral" />
-                  </ChipGroup>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Pickup {formatDateTime(r.pickup_at)} · {relativeTime(r.pickup_at)}
-                  </p>
-                </Link>
-                {canReject ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="btn-reject absolute right-3 bottom-2.5 h-7 px-2 text-xs"
-                    disabled={decide.isPending}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      decide.mutate(
-                        { requestId: r.id, approve: false, actorId: user.id },
-                        {
-                          onSuccess: () => toast.success(`Rejected ${r.reference}`),
-                          onError: (err) => toast.error(err.message),
-                        },
-                      );
-                    }}
-                  >
-                    Reject
-                  </Button>
-                ) : null}
-              </li>
-            );
-          })}
+      <ul className="dispatch-console__cards">
+        {queue.map((r) => {
+          const canReject = !!user && r.status === "submitted";
+          return (
+            <li key={r.id}>
+              <AdminRequestCard
+                request={r}
+                trailing={
+                  canReject ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="btn-reject h-8 px-3 text-xs"
+                      disabled={decide.isPending}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        decide.mutate(
+                          { requestId: r.id, approve: false, actorId: user.id },
+                          {
+                            onSuccess: () => toast.success(`Rejected ${r.reference}`),
+                            onError: (err) => toast.error(err.message),
+                          },
+                        );
+                      }}
+                    >
+                      Reject
+                    </Button>
+                  ) : null
+                }
+              />
+            </li>
+          );
+        })}
       </ul>
     );
 
   const vehiclesBody = (
-    <ul className="divide-y divide-border/60 pb-1 text-sm">
+    <ul className="dispatch-console__fleet">
       {availableVehicles.map((v) => (
-        <li key={v.id} className="flex items-center justify-between gap-2 px-4 py-2">
-          <Link to="/fleet/$vehicleId" params={{ vehicleId: v.id }} className="min-w-0 hover:text-primary">
-            <p className="truncate font-medium">
+        <li key={v.id} className="dispatch-console__fleet-row">
+          <Link
+            to="/fleet/$vehicleId"
+            params={{ vehicleId: v.id }}
+            className="dispatch-console__fleet-link"
+          >
+            <span className="dispatch-console__fleet-name">
               {v.fleet_number} · {v.name}
-            </p>
+            </span>
             <ChipGroup className="mt-1">
               <LookupMetaChip group="vehicle_category" value={v.category} />
               <MetaChip label={`${v.seat_capacity} seats`} tone="neutral" />
@@ -158,196 +143,139 @@ function DispatchPage() {
         </li>
       ))}
       {busyVehicles.map((v) => (
-        <li key={v.id} className="flex items-center justify-between gap-2 px-4 py-2 opacity-85">
-          <span className="min-w-0 truncate">
+        <li key={v.id} className="dispatch-console__fleet-row dispatch-console__fleet-row--busy">
+          <span className="dispatch-console__fleet-name truncate">
             {v.fleet_number} · {v.name}
           </span>
           <LookupChip group="vehicle_status" value={v.operational_status} />
         </li>
       ))}
-      {downVehicles.length > 0 && (
-        <li className="flex items-center gap-2 px-4 py-2">
-          <Wrench className="size-3.5 text-warning" />
+      {downVehicles.length > 0 ? (
+        <li className="dispatch-console__fleet-row dispatch-console__fleet-row--down">
+          <Wrench className="size-3.5 shrink-0 text-warning" aria-hidden />
           <MetaChip label={`+${downVehicles.length} unavailable / maintenance`} tone="warning" />
         </li>
-      )}
+      ) : null}
+      {availableVehicles.length === 0 && busyVehicles.length === 0 && downVehicles.length === 0 ? (
+        <li className="p-3">
+          <EmptyState flush compact title="No vehicles" description="Fleet list is empty." />
+        </li>
+      ) : null}
     </ul>
   );
 
-  const liveTrips = trips.data ?? [];
   const tripsBody =
     liveTrips.length === 0 ? (
-      <div className="p-3">
-        <EmptyState flush title="No live trips" description="Active assignments show here." />
-      </div>
+      <EmptyState flush title="No live trips" description="Active trips show here." />
     ) : (
-      <ul className="space-y-2 p-3">
-        {liveTrips.map((t) => {
-          const inner = (
-            <>
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{t.reference}</p>
-                  {t.vehicle_requests?.purpose && (
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{t.vehicle_requests.purpose}</p>
-                  )}
-                </div>
-                <LookupChip group="trip_status" value={t.status} />
-              </div>
-              <ChipGroup className="mt-2">
-                {t.vehicles?.registration_number && (
-                  <MetaChip label={t.vehicles.registration_number} tone="primary" />
-                )}
-                {t.drivers?.full_name && <MetaChip label={t.drivers.full_name} tone="info" />}
-              </ChipGroup>
-              {t.vehicle_requests?.pickup_at && (
-                <p className="mt-1.5 text-[11px] text-muted-foreground">
-                  Pickup {formatDateTime(t.vehicle_requests.pickup_at)} ·{" "}
-                  {relativeTime(t.vehicle_requests.pickup_at)}
-                </p>
-              )}
-            </>
-          );
-
-          const cardClass =
-            "block rounded-xl border border-border bg-background/80 px-3 py-3 shadow-sm transition-colors hover:border-primary/25 hover:bg-muted/30";
-
-          return (
-            <li key={t.id}>
-              {t.request_id ? (
-                <Link to="/requests/$requestId" params={{ requestId: t.request_id }} className={cardClass}>
-                  {inner}
-                </Link>
-              ) : (
-                <div className={cardClass}>{inner}</div>
-              )}
-            </li>
-          );
-        })}
+      <ul className="dispatch-console__cards">
+        {liveTrips.map((t) => (
+          <li key={t.id}>
+            <LiveTripCard trip={t} />
+          </li>
+        ))}
       </ul>
     );
 
-  function renderSection(section: DispatchSectionId, opts: SectionOptions = {}) {
-    const isCollapsed = collapsed[section];
-    const scrollBody = opts.scrollBody === true;
-
-    if (section === "queue") {
-      return (
-        <Panel
-          key={section}
-          title="Incoming requests"
-          description={queueDescription}
-          tone="warning"
-          collapsible
-          collapsed={isCollapsed}
-          onCollapsedChange={(v) => setCollapsed("queue", v)}
-          compact
-          {...(scrollBody ? { scrollBody: true } : {})}
-          bodyClassName="flex flex-col gap-0 p-0"
-        >
-          {queueBody}
-        </Panel>
-      );
-    }
-
-    if (section === "vehicles") {
-      return (
-        <Panel
-          key={section}
-          title="Vehicle availability"
-          description={
-            isCollapsed
-              ? `${availableVehicles.length} available · click to expand`
-              : `${availableVehicles.length} available now`
-          }
-          tone="success"
-          collapsible
-          collapsed={isCollapsed}
-          onCollapsedChange={(v) => setCollapsed("vehicles", v)}
-          compact
-          {...(scrollBody ? { scrollBody: true } : {})}
-          bodyClassName="p-0 pb-3"
-        >
-          {vehiclesBody}
-        </Panel>
-      );
-    }
-
-    return (
-      <Panel
-        key={section}
-        title="Live trips"
-        description={
-          isCollapsed
-            ? `${liveTrips.length} active · click to expand`
-            : "Trips in progress right now"
-        }
-        tone="info"
-        collapsible
-        collapsed={isCollapsed}
-        onCollapsedChange={(v) => setCollapsed("trips", v)}
-        compact
-        {...(scrollBody ? { scrollBody: true } : {})}
-        bodyClassName="flex flex-col p-0"
-        action={
-          <Button asChild size="sm" variant="outline" className="min-h-8" tooltip="Browse completed trips">
-            <Link to="/trips">History</Link>
-          </Button>
-        }
-      >
-        {tripsBody}
-      </Panel>
-    );
-  }
-
-  const leftExpanded = Number(!collapsed.queue) + Number(!collapsed.vehicles);
-
-  function leftSectionShell(section: "queue" | "vehicles") {
-    const isCollapsed = collapsed[section];
-    if (isCollapsed) return "flex shrink-0 flex-col";
-    if (leftExpanded === 2) return section === "queue" ? "flex min-h-0 flex-[44] flex-col" : "flex min-h-0 flex-[56] flex-col";
-    return "flex min-h-0 flex-1 flex-col";
-  }
-
   return (
-    <AppShell title="Admin dispatch" subtitle="Open a request to review and assign" fillViewport>
-      <div className="dispatch-console page-stack flex min-h-0 flex-1 flex-col gap-4 lg:overflow-hidden">
-        <KpiGrid className="shrink-0">
-          <KpiCard label="Pending requests" value={queue.length} hint="Need assignment" tone="warning" icon={<Clock />} />
+    <AppShell title="Dispatch" subtitle="Assign rides" fillViewport>
+      <div className="dispatch-console">
+        <div className="dispatch-console__kpis">
+          <KpiCard label="Pending" value={queue.length} hint="To assign" tone="warning" icon={<Clock />} />
           <KpiCard
-            label="Available vehicles"
+            label="Vehicles free"
             value={availableVehicles.length}
-            hint={`of ${fleet.length} total`}
+            hint={`${fleet.length} total`}
             tone="success"
             icon={<Car />}
           />
-          <KpiCard label="Assigned / on trip" value={busyVehicles.length} tone="primary" icon={<RouteIcon />} />
-          <KpiCard label="Live trips" value={liveTrips.length} tone="info" icon={<Radar />} />
-        </KpiGrid>
-
-        <div className="hidden min-h-0 flex-1 lg:flex lg:gap-4">
-          <div className="flex min-h-0 min-w-0 flex-[1.35] flex-col gap-4">
-            <div className={leftSectionShell("queue")}>{renderSection("queue", { scrollBody: true })}</div>
-            <div className={leftSectionShell("vehicles")}>{renderSection("vehicles", { scrollBody: true })}</div>
-          </div>
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {renderSection("trips", { scrollBody: true })}
-          </div>
+          <KpiCard
+            label="Drivers free"
+            value={availableDrivers.length}
+            hint="Free now"
+            tone="primary"
+            icon={<Users />}
+          />
+          <KpiCard label="Live" value={liveTrips.length} tone="info" icon={<Radar />} />
         </div>
 
-        <div className="flex flex-col gap-4 lg:hidden">
-          {DISPATCH_SECTION_ORDER.map((section) => renderSection(section))}
+        <div
+          className={cn(
+            "dispatch-console__board",
+            collapsed.queue && "dispatch-console__board--queue-min",
+            collapsed.vehicles && "dispatch-console__board--vehicles-min",
+            collapsed.trips && "dispatch-console__board--trips-min",
+          )}
+        >
+          <div className="dispatch-console__cell dispatch-console__cell--queue">
+            <Panel
+              title="Pending"
+              description={
+                collapsed.queue
+                  ? `${queue.length} pending · tap to open`
+                  : `${queue.length} to assign`
+              }
+              tone="warning"
+              collapsible
+              collapsed={collapsed.queue}
+              onCollapsedChange={(v) => setCollapsed("queue", v)}
+              compact
+              scrollBody
+              className="dispatch-console__panel"
+              bodyClassName="dispatch-console__panel-body"
+            >
+              {queueBody}
+            </Panel>
+          </div>
+
+          <div className="dispatch-console__cell dispatch-console__cell--trips">
+            <Panel
+              title="Live"
+              description={
+                collapsed.trips
+                  ? `${liveTrips.length} active · tap to open`
+                  : "Trips happening now"
+              }
+              tone="info"
+              collapsible
+              collapsed={collapsed.trips}
+              onCollapsedChange={(v) => setCollapsed("trips", v)}
+              compact
+              scrollBody
+              className="dispatch-console__panel"
+              bodyClassName="dispatch-console__panel-body"
+              action={
+                <Button asChild size="sm" variant="outline" className="min-h-8" tooltip="Past trips">
+                  <Link to="/trips">History</Link>
+                </Button>
+              }
+            >
+              {tripsBody}
+            </Panel>
+          </div>
+
+          <div className="dispatch-console__cell dispatch-console__cell--vehicles">
+            <Panel
+              title="Vehicles"
+              description={
+                collapsed.vehicles
+                  ? `${availableVehicles.length} available · tap to open`
+                  : `${availableVehicles.length} free · ${busyVehicles.length} busy`
+              }
+              tone="success"
+              collapsible
+              collapsed={collapsed.vehicles}
+              onCollapsedChange={(v) => setCollapsed("vehicles", v)}
+              compact
+              scrollBody
+              className="dispatch-console__panel"
+              bodyClassName="dispatch-console__panel-body"
+            >
+              {vehiclesBody}
+            </Panel>
+          </div>
         </div>
       </div>
     </AppShell>
   );
-}
-
-function cnQueueItem(withReject = false) {
-  return [
-    "block w-full px-4 py-3 text-left transition-colors hover:bg-primary/5",
-    withReject ? "pb-10" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
 }

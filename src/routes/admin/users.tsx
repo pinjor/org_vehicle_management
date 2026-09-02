@@ -9,7 +9,8 @@ import { AppPhoneField, EmptyState, Field, FilterBar, KpiCard, KpiGrid, Panel, S
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
-import { ROSTER_ROLE, formatDateTime } from "@/lib/fleet";
+import { ROSTER_ROLE } from "@/lib/fleet";
+import { WhenStamp } from "@/components/info-blocks";
 import { formatBdPhone, isValidBdPhone, maskBdPhoneInput, normalizeBdPhone } from "@/lib/phone";
 import {
   useCreateRosterEntry,
@@ -272,7 +273,9 @@ function AdminUsersPage() {
                             <StatusChip label="Pending" tone="warning" />
                           )}
                         </td>
-                        <td className="whitespace-nowrap text-muted-foreground">{formatDateTime(r.created_at)}</td>
+                        <td className="whitespace-nowrap text-muted-foreground">
+                          <WhenStamp at={r.created_at} />
+                        </td>
                         <td className="text-right">
                           {r.is_active && !r.user_id && (
                             <Button

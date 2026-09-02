@@ -13,8 +13,13 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 /**
  * Inline raster styles only — no remote style URL.
- * OpenFreeMap liberty failed blank in some networks (vector TileJSON / fonts).
- * Esri z/y/x · OSM.fr z/x/y — separate styles, not mixed in one source.
+ *
+ * Important: every URL in `tiles` is a load-balanced mirror of the SAME scheme.
+ * Mixing providers (e.g. OSM.fr + OSM.de) causes checkerboard empty boxes when
+ * one host fails or rate-limits.
+ *
+ * Primary: Carto Voyager (solid at all zooms, free for reasonable use).
+ * Fallback style: OSM.fr only (same-family a/b/c mirrors).
  */
 export const FREE_MAP_STYLE: StyleSpecification = {
   version: 8,
@@ -23,19 +28,31 @@ export const FREE_MAP_STYLE: StyleSpecification = {
     streets: {
       type: "raster",
       tiles: [
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
       ],
       tileSize: 256,
-      attribution: "© Esri · © OpenStreetMap",
-      maxzoom: 19,
+      attribution: "© OpenStreetMap · © CARTO",
+      minzoom: 0,
+      maxzoom: 20,
     },
   },
-  layers: [{ id: "streets", type: "raster", source: "streets" }],
+  layers: [
+    {
+      id: "background",
+      type: "background",
+      paint: { "background-color": "#dce6ef" },
+    },
+    { id: "streets", type: "raster", source: "streets" },
+  ],
 };
 
+/** Fallback if Carto fails — single OSM.fr family only (no mixed hosts). */
 export const FREE_MAP_STYLE_OSM: StyleSpecification = {
   version: 8,
-  name: "FleetOps OSM",
+  name: "FleetOps OSM.fr",
   sources: {
     streets: {
       type: "raster",
@@ -43,14 +60,21 @@ export const FREE_MAP_STYLE_OSM: StyleSpecification = {
         "https://a.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
         "https://b.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
         "https://c.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
-        "https://tile.openstreetmap.de/{z}/{x}/{y}.png",
       ],
       tileSize: 256,
       attribution: "© OpenStreetMap",
-      maxzoom: 19,
+      minzoom: 0,
+      maxzoom: 18,
     },
   },
-  layers: [{ id: "streets", type: "raster", source: "streets" }],
+  layers: [
+    {
+      id: "background",
+      type: "background",
+      paint: { "background-color": "#dce6ef" },
+    },
+    { id: "streets", type: "raster", source: "streets" },
+  ],
 };
 
 export const DHAKA_CENTER: [number, number] = [90.4125, 23.8103]; // lng, lat
@@ -73,10 +97,11 @@ export function lineFeature(path: LatLng[]) {
   };
 }
 
-export function fitLatLngs(map: MapLibreMap, points: LatLng[], padding = 56, maxZoom = 14.5) {
+export function fitLatLngs(map: MapLibreMap, points: LatLng[], padding = 56, maxZoom = 15) {
   if (!points.length) return;
   if (points.length === 1) {
-    map.easeTo({ center: toLngLat(points[0]!), zoom: 14 });
+    // Stay under Esri/OSM native caps — higher zoom triggers "Map data not yet available" tiles
+    map.easeTo({ center: toLngLat(points[0]!), zoom: Math.min(15, maxZoom) });
     return;
   }
   const bounds = new maplibregl.LngLatBounds();
@@ -172,7 +197,12 @@ export function whenStyleReady(map: MapLibreMap, cb: () => void) {
 /** Ensure MapLibre paints after layout — blank maps often = 0×0 container at init. */
 export function mountMap(
   container: HTMLElement,
-  opts?: { center?: [number, number]; zoom?: number },
+  opts?: {
+    center?: [number, number];
+    zoom?: number;
+    /** Default true so one-finger page scroll works on mobile ride detail. */
+    cooperativeGestures?: boolean;
+  },
 ) {
   container.style.width = "100%";
   container.style.height = "100%";
@@ -185,18 +215,22 @@ export function mountMap(
     style: FREE_MAP_STYLE,
     center: opts?.center ?? DHAKA_CENTER,
     zoom: opts?.zoom ?? 12,
+    minZoom: 2,
+    maxZoom: 18,
     attributionControl: { compact: true },
     fadeDuration: 0,
     pitchWithRotate: false,
+    renderWorldCopies: false,
+    cooperativeGestures: opts?.cooperativeGestures ?? true,
   });
   map.addControl(new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }), "top-right");
 
   let fellBack = false;
   map.on("error", (e) => {
     const msg = String((e as { error?: { message?: string } }).error?.message ?? "");
-    // Esri tile fail → OSM.fr
+    // Carto tile fail → OSM.fr family
     if (fellBack) return;
-    if (/arcgis|esri|tile|ajax|failed|403|404/i.test(msg)) {
+    if (/tile|ajax|failed|403|404|carto|basemaps/i.test(msg)) {
       fellBack = true;
       try {
         map.setStyle(FREE_MAP_STYLE_OSM);

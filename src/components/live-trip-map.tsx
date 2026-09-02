@@ -264,8 +264,8 @@ export function LiveTripMap({
     <div
       className={
         mapOnly
-          ? `relative overflow-hidden bg-[#e8f0e9] ${className}`
-          : `relative overflow-hidden rounded-xl border border-border/80 bg-[#e8f0e9] shadow-sm ${className}`
+          ? `relative overflow-hidden bg-[#f0f0f0] ${className}`
+          : `relative overflow-hidden rounded-xl border border-border/80 bg-[#f0f0f0] shadow-sm ${className}`
       }
     >
       <div ref={containerRef} className="fleet-map h-full w-full" />

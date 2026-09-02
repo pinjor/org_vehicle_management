@@ -115,7 +115,7 @@ function EmployeeProfile({ profile }: { profile: ProfileRow }) {
 
   return (
     <AppShell title="Profile" subtitle="Your details">
-      <div className="employee-profile page-stack mx-auto w-full max-w-lg px-1 sm:px-0">
+      <div className="employee-profile page-stack w-full min-w-0 px-1 sm:px-0">
         <section className="employee-profile__hero">
           <div className="employee-profile__avatar" aria-hidden>
             {initial}
@@ -181,7 +181,7 @@ function DriverProfile({ profile }: { profile: ProfileRow }) {
 
   return (
     <AppShell title={t("profile.title")} subtitle={t("profile.subtitle")}>
-      <div className="employee-profile page-stack mx-auto w-full max-w-lg px-1 sm:px-0">
+      <div className="employee-profile page-stack w-full min-w-0 px-1 sm:px-0">
         <section className="employee-profile__hero">
           <div className="employee-profile__avatar" aria-hidden>
             {initial}

@@ -6,28 +6,29 @@ import { cn } from "@/lib/utils";
 import type { Tone } from "@/lib/fleet";
 
 const TONE_CLASS: Record<Tone, string> = {
-  success: "bg-success/22 text-success border-success/40 shadow-[inset_0_1px_0_oklch(1_0_0/0.4)]",
-  warning: "bg-warning/24 text-warning-foreground border-warning/45 shadow-[inset_0_1px_0_oklch(1_0_0/0.4)]",
-  danger: "bg-destructive/20 text-destructive border-destructive/40 shadow-[inset_0_1px_0_oklch(1_0_0/0.4)]",
-  info: "bg-info/22 text-info border-info/40 shadow-[inset_0_1px_0_oklch(1_0_0/0.4)]",
-  primary: "bg-primary/20 text-primary border-primary/40 shadow-[inset_0_1px_0_oklch(1_0_0/0.4)]",
-  violet: "bg-violet/22 text-violet border-violet/40 shadow-[inset_0_1px_0_oklch(1_0_0/0.4)]",
-  coral: "bg-coral/22 text-coral border-coral/40 shadow-[inset_0_1px_0_oklch(1_0_0/0.4)]",
-  rose: "bg-rose/22 text-rose border-rose/40 shadow-[inset_0_1px_0_oklch(1_0_0/0.4)]",
-  sky: "bg-sky/24 text-sky border-sky/40 shadow-[inset_0_1px_0_oklch(1_0_0/0.4)]",
-  neutral: "bg-muted text-muted-foreground border-border shadow-[inset_0_1px_0_oklch(1_0_0/0.45)]",
+  success: "bg-success/14 text-success border-success/30",
+  warning: "bg-warning/22 text-warning-foreground border-warning/40",
+  danger: "bg-destructive/12 text-destructive border-destructive/35",
+  info: "bg-info/14 text-info border-info/30",
+  primary: "bg-primary text-primary-foreground border-primary",
+  violet: "bg-violet/14 text-violet border-violet/30",
+  coral: "bg-coral/14 text-coral border-coral/30",
+  rose: "bg-rose/14 text-rose border-rose/30",
+  sky: "bg-sky/18 text-sky-foreground border-sky/35",
+  neutral: "bg-muted text-muted-foreground border-border",
 };
 
 const FILTER_ACTIVE: Record<Tone, string> = {
-  success: "border-success/50 bg-success/24 text-success ring-2 ring-success/30 font-semibold",
-  warning: "border-warning/50 bg-warning/26 text-warning-foreground ring-2 ring-warning/30 font-semibold",
-  danger: "border-destructive/50 bg-destructive/20 text-destructive ring-2 ring-destructive/30 font-semibold",
-  info: "border-info/50 bg-info/24 text-info ring-2 ring-info/30 font-semibold",
-  primary: "border-primary/50 bg-primary/22 text-primary ring-2 ring-primary/30 font-semibold",
-  violet: "border-violet/50 bg-violet/24 text-violet ring-2 ring-violet/30 font-semibold",
-  coral: "border-coral/50 bg-coral/24 text-coral ring-2 ring-coral/30 font-semibold",
-  rose: "border-rose/50 bg-rose/24 text-rose ring-2 ring-rose/30 font-semibold",
-  sky: "border-sky/50 bg-sky/24 text-sky ring-2 ring-sky/30 font-semibold",
+  success: "border-success/50 bg-success/20 text-success ring-2 ring-success/25 font-semibold",
+  warning:
+    "border-warning/50 bg-warning/28 text-warning-foreground ring-2 ring-warning/25 font-semibold",
+  danger: "border-destructive/50 bg-destructive/16 text-destructive ring-2 ring-destructive/25 font-semibold",
+  info: "border-info/50 bg-info/20 text-info ring-2 ring-info/25 font-semibold",
+  primary: "border-primary bg-primary text-primary-foreground ring-2 ring-primary/25 font-semibold",
+  violet: "border-violet/50 bg-violet/20 text-violet ring-2 ring-violet/25 font-semibold",
+  coral: "border-coral/50 bg-coral/20 text-coral ring-2 ring-coral/25 font-semibold",
+  rose: "border-rose/50 bg-rose/20 text-rose ring-2 ring-rose/25 font-semibold",
+  sky: "border-sky/50 bg-sky/22 text-sky-foreground ring-2 ring-sky/25 font-semibold",
   neutral: "border-border bg-muted text-foreground ring-2 ring-border font-semibold",
 };
 

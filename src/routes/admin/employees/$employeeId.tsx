@@ -1,10 +1,20 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { AppShell } from "@/components/app-shell";
+import { TripListRow } from "@/components/info-blocks";
 import { LookupChip } from "@/components/lookup-chip";
-import { DataRow, EmptyState, KpiCard, KpiGrid, List, ListLink, ListRow, Panel, StatusChip } from "@/components/fleet-ui";
+import {
+  DataRow,
+  EmptyState,
+  KpiCard,
+  KpiGrid,
+  List,
+  ListRow,
+  Panel,
+  StatusChip,
+} from "@/components/fleet-ui";
 import { useAuth } from "@/lib/auth";
-import { formatDateTime } from "@/lib/fleet";
+import { sortRequestsList } from "@/lib/fleet";
 import { formatBdPhone } from "@/lib/phone";
 import { useAdminEmployee } from "@/lib/queries";
 
@@ -37,7 +47,7 @@ function EmployeeProfilePage() {
   }
 
   const profile = data?.profile;
-  const requests = data?.requests ?? [];
+  const requests = sortRequestsList(data?.requests ?? []);
 
   if (!profile) {
     return (
@@ -83,17 +93,21 @@ function EmployeeProfilePage() {
             <List>
               {requests.map((r) => (
                 <ListRow key={r.id}>
-                  <ListLink to="/requests/$requestId" params={{ requestId: r.id }}>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">
-                        {r.reference} · {r.purpose}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDateTime(r.pickup_at)} · {r.passenger_count} pax
-                      </p>
-                    </div>
-                    <LookupChip group="request_status" value={r.status} />
-                  </ListLink>
+                  <TripListRow
+                    when={r.pickup_at}
+                    title={r.purpose || r.reference}
+                    subtitle={[
+                      r.drivers?.full_name ? `Driver ${r.drivers.full_name}` : null,
+                      r.vehicles?.registration_number,
+                      `${r.passenger_count} pax`,
+                      r.reference,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                    end={<LookupChip group="request_status" value={r.status} />}
+                    to="/requests/$requestId"
+                    params={{ requestId: r.id }}
+                  />
                 </ListRow>
               ))}
             </List>

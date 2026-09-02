@@ -41,6 +41,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-fleetops-dev-secret-change-me}
       HOST: 0.0.0.0
       PORT: 3000
+      TZ: Asia/Dhaka
       PGHOST: postgres
       PGUSER: fleetops
       PGPASSWORD: fleetops

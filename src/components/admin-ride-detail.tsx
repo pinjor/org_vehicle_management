@@ -1,9 +1,10 @@
-import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Car, User } from "lucide-react";
-import { useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { Car, User } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AssignmentPanel } from "@/components/assignment-panel";
 import { LiveTripMap } from "@/components/live-trip-map";
+import { WhenBanner, WhenStamp } from "@/components/info-blocks";
 import { LookupChip } from "@/components/lookup-chip";
 import { OsmRouteMap } from "@/components/osm-route-map";
 import { AppShell } from "@/components/app-shell";
@@ -11,8 +12,8 @@ import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { EmptyState } from "@/components/fleet-ui";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
-import { formatDateTime, relativeTime } from "@/lib/fleet";
 import { useLookupEntry } from "@/lib/lookups-context";
+import { formatBdPhone } from "@/lib/phone";
 import type { LatLng } from "@/lib/osm";
 import {
   useAuditTrail,
@@ -23,14 +24,11 @@ import {
 } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import {
-  formatPickupLabel,
   pointTone,
   trackFocusIndex,
   type RoutePoint,
   type TripLike,
 } from "@/lib/ride-detail";
-
-type Passenger = { id: string; full_name: string; phone?: string | null };
 
 function requesterInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -42,9 +40,17 @@ function requesterInitials(name: string) {
 export function AdminRideDetail({ requestId }: { requestId: string }) {
   const { data, isLoading } = useRequest(requestId);
   const { isDispatcher, user } = useAuth();
-  const navigate = useNavigate();
   const decide = useDecideRequest();
   const [changeAssign, setChangeAssign] = useState(false);
+  const [deskLayout, setDeskLayout] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const apply = () => setDeskLayout(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   const request = data?.request;
   const tripRel = request?.trips as unknown;
@@ -57,7 +63,7 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
 
   if (isLoading) {
     return (
-      <AppShell title="Ride details" subtitle="Loading…">
+      <AppShell title="Request" subtitle="Loading…" fillViewport backTo="/requests" backLabel="Back">
         <DetailPageSkeleton />
       </AppShell>
     );
@@ -65,7 +71,7 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
 
   if (!request) {
     return (
-      <AppShell title="Ride details" subtitle="Not found">
+      <AppShell title="Request" subtitle="Not found" fillViewport backTo="/requests" backLabel="Back">
         <EmptyState title="Request not found" />
       </AppShell>
     );
@@ -85,6 +91,7 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
     isAssigned &&
     ["assigned", "approved", "submitted", "in_progress"].includes(request.status) &&
     (!trip || ["driver_assigned", "driver_confirmed"].includes(trip.status));
+  const requesterPhone = request.requester_phone?.trim() || null;
 
   const mapPoints: RoutePoint[] = ((data.points ?? []) as RoutePoint[]).map((p) => ({
     name: p.name,
@@ -101,19 +108,6 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
       : null;
   const trail: LatLng[] = (loc.data?.trail ?? []).map((p) => [p.lat, p.lng] as LatLng);
   const focusIdx = trip ? trackFocusIndex(trip.status, mapPoints, trip.current_stop_index ?? 0) : 0;
-  const passengersRaw = (data.passengers ?? []) as Passenger[];
-  const passengers =
-    passengersRaw.length > 0
-      ? passengersRaw
-      : request.requester_name
-        ? [
-            {
-              id: "requester",
-              full_name: request.requester_name,
-              phone: request.requester_phone ?? null,
-            },
-          ]
-        : [];
   const historyRows = ((history.data ?? []) as { id: string; to_status: string; created_at: string }[]).slice(
     -4,
   );
@@ -126,77 +120,45 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
     }[]
   ).slice(0, 6);
 
-  const mapBlock =
+  const mapEl =
     mapPoints.length > 0 ? (
-      <div className="ride-detail__map ride-detail__map--admin">
-        {tripLive ? (
-          <LiveTripMap
-            mapOnly
-            className="ride-detail__map-el ride-detail__map-el--admin"
-            points={mapPoints}
-            focusIndex={focusIdx}
-            externalPosition={externalPos}
-            trail={trail}
-            markerLabel={request.drivers?.full_name ?? "Driver"}
-          />
-        ) : (
-          <OsmRouteMap
-            framed={false}
-            showSummary={false}
-            className="ride-detail__map-el ride-detail__map-el--admin"
-            points={mapPoints}
-            focusIndex={focusIdx}
-          />
-        )}
-      </div>
+      tripLive ? (
+        <LiveTripMap
+          mapOnly
+          className="ride-detail__map-el ride-detail__map-el--admin"
+          points={mapPoints}
+          focusIndex={focusIdx}
+          externalPosition={externalPos}
+          trail={trail}
+          markerLabel={request.drivers?.full_name ?? "Driver"}
+        />
+      ) : (
+        <OsmRouteMap
+          framed={false}
+          showSummary={false}
+          className="ride-detail__map-el ride-detail__map-el--admin"
+          points={mapPoints}
+          focusIndex={focusIdx}
+        />
+      )
     ) : (
-      <p className="ride-detail__muted">No coordinates to plot.</p>
+      <p className="ride-detail__muted admin-req__map-empty">No coordinates to plot.</p>
     );
 
   return (
-    <AppShell title="Ride details" subtitle={request.reference} fillViewport backTo="/requests" backLabel="Back to requests">
-      <div className="plan-ride ride-detail ride-detail--admin">
-        <header className="plan-ride__top">
-          <button
-            type="button"
-            className="plan-ride__back"
-            aria-label="Back"
-            onClick={() => {
-              if (typeof window !== "undefined" && window.history.length > 1) {
-                window.history.back();
-                return;
-              }
-              void navigate({ to: "/requests" });
-            }}
-          >
-            <ArrowLeft className="size-5" />
-          </button>
-          <h1 className="plan-ride__title">Ride details</h1>
-          <span className="plan-ride__top-spacer" aria-hidden />
-        </header>
-
-        <div className="ride-detail__ref">
-          <span className="ride-detail__ref-code">{request.reference}</span>
-          <div className="ride-detail__admin-chips">
-            <LookupChip group="priority" value={request.priority} pill />
+    <AppShell
+      title="Request"
+      subtitle={request.reference}
+      fillViewport
+      backTo="/requests"
+      backLabel="Back"
+    >
+      <div className="admin-req">
+        <div className="admin-req__status">
+          <div className="admin-req__chips">
             <LookupChip group="request_status" value={request.status} pill />
-          </div>
-        </div>
-
-        <div className="plan-ride__pills ride-detail__pills-row">
-          <div className="ride-detail__pills-main">
-            <span className="plan-ride__pill">
-              <span className="truncate">{formatPickupLabel(request.pickup_at)}</span>
-            </span>
-            <span className="plan-ride__pill">
-              <span className="truncate">
-                {request.passenger_count}{" "}
-                {request.passenger_count === 1 ? "passenger" : "passengers"}
-              </span>
-            </span>
-            <span className="plan-ride__pill">
-              <span className="truncate">{tripType.label}</span>
-            </span>
+            <span className="admin-req__pill">{request.passenger_count} pax</span>
+            <span className="admin-req__pill">{tripType.label}</span>
           </div>
           {canDecide && user ? (
             <Button
@@ -220,101 +182,104 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
           ) : null}
         </div>
 
-        <div className="ride-detail__who">
-          <span className="ride-detail__who-avatar" aria-hidden>
-            {requesterInitials(request.requester_name)}
-          </span>
-          <div className="ride-detail__who-body min-w-0 flex-1">
-            <p className="ride-detail__who-label">Requested by</p>
-            {request.requester_id ? (
-              <Link
-                to="/admin/employees/$employeeId"
-                params={{ employeeId: request.requester_id }}
-                className="ride-detail__who-name ride-detail__link"
-              >
-                {request.requester_name}
-              </Link>
-            ) : (
-              <p className="ride-detail__who-name">{request.requester_name}</p>
-            )}
-            <p className="ride-detail__who-meta">
-              {request.requester_phone ? (
-                <a href={`tel:${request.requester_phone}`} className="ride-detail__who-phone">
-                  {request.requester_phone}
-                </a>
-              ) : (
-                <span>No phone</span>
-              )}
-              {request.expected_end_at ? (
-                <span> · ends {formatDateTime(request.expected_end_at)}</span>
-              ) : null}
-            </p>
-          </div>
-        </div>
+        <div className="admin-req__desk">
+          <div className="admin-req__main">
+            <WhenBanner at={request.pickup_at} className="admin-req__when" />
 
-        <div className="ride-detail__desk ride-detail__desk--admin">
-          <div className="ride-detail__desk-info">
-            <div className="plan-ride__route-wrap">
+            <section className="admin-req__who" aria-label="Requester">
+              <span className="admin-req__avatar" aria-hidden>
+                {requesterInitials(request.requester_name)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="admin-req__who-label">Requested by</p>
+                {request.requester_id ? (
+                  <Link
+                    to="/admin/employees/$employeeId"
+                    params={{ employeeId: request.requester_id }}
+                    className="admin-req__who-name"
+                  >
+                    {request.requester_name}
+                  </Link>
+                ) : (
+                  <p className="admin-req__who-name">{request.requester_name}</p>
+                )}
+                <p className="admin-req__who-meta">
+                  {requesterPhone ? (
+                    <span>{formatBdPhone(requesterPhone)}</span>
+                  ) : (
+                    <span>No phone</span>
+                  )}
+                  {request.expected_end_at ? (
+                    <span className="inline-flex items-baseline gap-1">
+                      {" "}
+                      · ends <WhenStamp at={request.expected_end_at} />
+                    </span>
+                  ) : null}
+                </p>
+              </div>
+            </section>
+
+            <section className="admin-req__route" aria-label="Route">
+              <p className="admin-req__section-label">Route</p>
               <div className="plan-ride__route">
                 {mapPoints.length === 0 ? (
                   <p className="ride-detail__muted p-3">No route points.</p>
                 ) : (
                   mapPoints.map((p, i) => (
-                    <div key={`${p.point_type}-${i}`} className="plan-ride__stop">
+                    <div
+                      key={`${p.point_type}-${i}`}
+                      className={cn(
+                        "plan-ride__stop",
+                        tripLive && i === focusIdx && "plan-ride__stop--focus",
+                      )}
+                    >
                       <span
                         className={cn("plan-ride__dot", `plan-ride__dot--${pointTone(p.point_type)}`)}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="plan-ride__stop-name">{p.name}</span>
+                        <span className="plan-ride__stop-name">
+                          {p.name}
+                          {tripLive && i === focusIdx ? (
+                            <span className="plan-ride__stop-now"> · now</span>
+                          ) : null}
+                        </span>
                         {p.address ? <span className="plan-ride__stop-addr">{p.address}</span> : null}
                       </span>
                     </div>
                   ))
                 )}
               </div>
-            </div>
+            </section>
 
-            {request.purpose ? (
-              <div className="ride-detail__purpose ride-detail__purpose--tight">
-                <p className="ride-detail__purpose-label">Purpose</p>
-                <p className="ride-detail__purpose-text">{request.purpose}</p>
+            {(request.purpose || request.special_requirements) && (
+              <div className="admin-req__facts">
+                {request.purpose ? (
+                  <div className="admin-req__purpose">
+                    <p className="admin-req__section-label">Purpose</p>
+                    <p className="admin-req__purpose-text">{request.purpose}</p>
+                  </div>
+                ) : null}
+                {request.special_requirements ? (
+                  <p className="admin-req__notes">{request.special_requirements}</p>
+                ) : null}
+              </div>
+            )}
+
+            {!deskLayout ? (
+              <div className="admin-req__map-mobile" aria-label={tripLive ? "Live map" : "Route map"}>
+                <section className="admin-req__map-card">
+                  <p className="admin-req__section-label admin-req__map-label">
+                    {tripLive ? "Live map" : "Route map"}
+                  </p>
+                  {mapEl}
+                </section>
               </div>
             ) : null}
 
-            {request.special_requirements ? (
-              <p className="ride-detail__notes-line">{request.special_requirements}</p>
-            ) : null}
-
-            <div className="ride-detail__map-mobile">{mapBlock}</div>
-
-            {passengers.length > 0 ? (
-              <section className="ride-detail__card ride-detail__card--tight">
-                <p className="ride-detail__card-title">
-                  Passengers · {request.passenger_count}
-                </p>
-                <ul className="ride-detail__pax-list">
-                  {passengers.map((p) => (
-                    <li key={p.id} className="ride-detail__pax-row">
-                      <span className="ride-detail__assign-name">{p.full_name}</span>
-                      {p.phone ? (
-                        <a href={`tel:${p.phone}`} className="ride-detail__assign-sub ride-detail__who-phone">
-                          {p.phone}
-                        </a>
-                      ) : (
-                        <span className="ride-detail__assign-sub">No phone</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-
             {isAssigned ? (
-              <section className="ride-detail__card ride-detail__card--tight">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="ride-detail__card-title" style={{ marginBottom: 0 }}>
-                    Vehicle & driver
-                  </p>
+              <section className="admin-req__card">
+                <div className="admin-req__card-head">
+                  <p className="admin-req__section-label">Vehicle & driver</p>
                   {canChangeAssign ? (
                     <Button
                       type="button"
@@ -329,9 +294,9 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
                   ) : null}
                 </div>
                 {!changeAssign ? (
-                  <div className="ride-detail__assign-grid ride-detail__assign-grid--tight mt-2">
-                    <div className="ride-detail__assign-row">
-                      <span className="ride-detail__assign-icon">
+                  <div className="admin-req__party">
+                    <div className="admin-req__party-row">
+                      <span className="admin-req__party-icon" aria-hidden>
                         <Car className="size-4" />
                       </span>
                       <span className="min-w-0">
@@ -339,22 +304,22 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
                           <Link
                             to="/fleet/$vehicleId"
                             params={{ vehicleId: request.vehicles.id }}
-                            className="ride-detail__assign-name ride-detail__link"
+                            className="admin-req__pax-name admin-req__link"
                           >
                             {request.vehicles.name ?? "—"}
                           </Link>
                         ) : (
-                          <span className="ride-detail__assign-name">
+                          <span className="admin-req__pax-name">
                             {request.vehicles?.name ?? "—"}
                           </span>
                         )}
-                        <span className="ride-detail__assign-sub">
+                        <span className="admin-req__pax-miss">
                           {request.vehicles?.registration_number ?? "Vehicle"}
                         </span>
                       </span>
                     </div>
-                    <div className="ride-detail__assign-row">
-                      <span className="ride-detail__assign-icon">
+                    <div className="admin-req__party-row">
+                      <span className="admin-req__party-icon" aria-hidden>
                         <User className="size-4" />
                       </span>
                       <span className="min-w-0">
@@ -362,43 +327,45 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
                           <Link
                             to="/drivers/$driverId"
                             params={{ driverId: request.drivers.id }}
-                            className="ride-detail__assign-name ride-detail__link"
+                            className="admin-req__pax-name admin-req__link"
                           >
                             {request.drivers.full_name ?? "—"}
                           </Link>
                         ) : (
-                          <span className="ride-detail__assign-name">
+                          <span className="admin-req__pax-name">
                             {request.drivers?.full_name ?? "—"}
                           </span>
                         )}
-                        <span className="ride-detail__assign-sub">
-                          {request.drivers?.phone ?? "Driver"}
+                        <span className="admin-req__pax-miss">
+                          {request.drivers?.phone
+                            ? formatBdPhone(request.drivers.phone)
+                            : "Driver"}
                         </span>
                       </span>
                     </div>
                     {request.assigned_at ? (
-                      <p className="ride-detail__assign-meta">
-                        Assigned {relativeTime(request.assigned_at)}
+                      <p className="admin-req__assign-meta">
+                        Assigned <WhenStamp at={request.assigned_at} withRelative />
                       </p>
                     ) : null}
                   </div>
                 ) : (
-                  <div className="mt-2">
-                    <AssignmentPanel
-                      requestId={requestId}
-                      passengers={request.passenger_count}
-                      expectedEnd={request.expected_end_at ?? request.pickup_at}
-                      changeMode
-                      initialVehicleId={request.assigned_vehicle_id ?? request.vehicles?.id}
-                      initialDriverId={request.assigned_driver_id ?? request.drivers?.id}
-                      onAssigned={() => setChangeAssign(false)}
-                    />
-                  </div>
+                  <AssignmentPanel
+                    requestId={requestId}
+                    passengers={request.passenger_count}
+                    expectedEnd={request.expected_end_at ?? request.pickup_at}
+                    changeMode
+                    initialVehicleId={request.assigned_vehicle_id ?? request.vehicles?.id}
+                    initialDriverId={request.assigned_driver_id ?? request.drivers?.id}
+                    onAssigned={() => setChangeAssign(false)}
+                  />
                 )}
               </section>
-            ) : canAssign ? (
-              <section className="ride-detail__card ride-detail__card--tight">
-                <p className="ride-detail__card-title">Assign vehicle & driver</p>
+            ) : null}
+
+            {canAssign ? (
+              <section className="admin-req__card admin-req__card--assign">
+                <p className="admin-req__section-label">Assign</p>
                 <AssignmentPanel
                   requestId={requestId}
                   passengers={request.passenger_count}
@@ -409,18 +376,21 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
             ) : null}
 
             {trip ? (
-              <section className="ride-detail__card ride-detail__card--tight">
-                <p className="ride-detail__card-title">
-                  Trip progress{trip.reference ? ` · ${trip.reference}` : ""}
+              <section className="admin-req__card">
+                <p className="admin-req__section-label">
+                  Trip progress
+                  {trip.reference ? ` · ${trip.reference}` : ""}
+                  {tripLive && externalPos ? (
+                    <span className="admin-req__live"> · Live</span>
+                  ) : null}
                 </p>
-                {tripLive && externalPos ? <p className="ride-detail__live">Live tracking on</p> : null}
                 <ul className="ride-detail__history">
                   {historyRows.map((h, i, arr) => (
                     <li key={h.id} className="ride-detail__history-row">
                       <LookupChip group="trip_status" value={h.to_status} dot={false} />
                       <span className="ride-detail__history-time">
-                        {i === arr.length - 1 ? "Now · " : ""}
-                        {formatDateTime(h.created_at)}
+                        {i === arr.length - 1 ? <span className="mr-1">Now ·</span> : null}
+                        <WhenStamp at={h.created_at} />
                       </span>
                     </li>
                   ))}
@@ -434,14 +404,16 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
               </section>
             ) : null}
 
-            <section className="ride-detail__card ride-detail__card--tight ride-detail__card--flush">
-              <p className="ride-detail__card-title ride-detail__card-title--pad">Activity</p>
+            <details className="admin-req__card admin-req__activity">
+              <summary className="admin-req__activity-sum">
+                Activity · {auditRows.length}
+              </summary>
               <ul className="ride-detail__audit">
                 {auditRows.map((a) => (
                   <li key={a.id} className="ride-detail__audit-row">
                     <p className="ride-detail__audit-action">{a.action.replace(/_/g, " ")}</p>
                     <p className="ride-detail__audit-meta">
-                      {a.actor_name ?? "System"} · {formatDateTime(a.created_at)}
+                      {a.actor_name ?? "System"} · <WhenStamp at={a.created_at} />
                     </p>
                   </li>
                 ))}
@@ -451,22 +423,24 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
                   </li>
                 ) : null}
               </ul>
-            </section>
+            </details>
           </div>
 
-          <aside className="ride-detail__desk-map" aria-label={tripLive ? "Live map" : "Route map"}>
-            <section className="ride-detail__map-panel">
-              <div className="ride-detail__map-panel-head">
-                <p className="ride-detail__card-title" style={{ marginBottom: 0 }}>
-                  {tripLive ? "Live map" : "Route map"}
-                </p>
-                {tripLive && request.drivers?.full_name ? (
-                  <span className="ride-detail__map-panel-sub">{request.drivers.full_name}</span>
-                ) : null}
-              </div>
-              {mapBlock}
-            </section>
-          </aside>
+          {deskLayout ? (
+            <aside className="admin-req__aside" aria-label={tripLive ? "Live map" : "Route map"}>
+              <section className="admin-req__map-card">
+                <div className="admin-req__map-head">
+                  <p className="admin-req__section-label" style={{ padding: 0, margin: 0 }}>
+                    {tripLive ? "Live map" : "Route map"}
+                  </p>
+                  {tripLive && request.drivers?.full_name ? (
+                    <span className="admin-req__map-sub">{request.drivers.full_name}</span>
+                  ) : null}
+                </div>
+                {mapEl}
+              </section>
+            </aside>
+          ) : null}
         </div>
       </div>
     </AppShell>

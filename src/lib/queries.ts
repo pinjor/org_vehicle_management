@@ -51,6 +51,12 @@ export type RequestRow = {
     current_status?: string;
   } | null;
   trips?: { id: string; reference: string; status: string }[];
+  request_route_points?: {
+    name: string;
+    address?: string | null;
+    point_type: string;
+    sequence: number;
+  }[];
 };
 
 async function fetchRequests(filters?: { status?: string[]; requesterId?: string }) {
@@ -180,6 +186,8 @@ export type TripRecord = {
     reference?: string;
     passenger_count?: number;
     is_round_trip?: boolean;
+    requester_name?: string;
+    requester_phone?: string;
     request_route_points?: {
       sequence: number;
       name: string;
@@ -188,6 +196,11 @@ export type TripRecord = {
       longitude: number | null;
       point_type: string;
       expected_at?: string | null;
+    }[];
+    request_passengers?: {
+      full_name: string;
+      phone?: string | null;
+      is_primary?: boolean;
     }[];
   };
 };
@@ -286,10 +299,23 @@ export function useDepartments() {
   });
 }
 
+export type UnavailabilityRow = {
+  id: string;
+  reference: string;
+  status: string;
+  reason: string;
+  severity: string;
+  description?: string | null;
+  created_at: string;
+  vehicle_id: string;
+  vehicles?: { registration_number?: string; name?: string } | null;
+  drivers?: { full_name?: string; phone?: string } | null;
+};
+
 export function useUnavailabilityRequests() {
   return useQuery({
     queryKey: ["unavailability"],
-    queryFn: () => apiGet<unknown[]>("/api/unavailability"),
+    queryFn: () => apiGet<UnavailabilityRow[]>("/api/unavailability"),
   });
 }
 
@@ -324,23 +350,7 @@ export function useActiveTrips() {
   return useQuery({
     queryKey: ["active-trips"],
     refetchInterval: 20_000,
-    queryFn: () =>
-      apiGet<
-        {
-          id: string;
-          reference: string;
-          status: string;
-          request_id?: string;
-          created_at?: string;
-          vehicles?: { name?: string; registration_number?: string } | null;
-          drivers?: { full_name?: string; phone?: string } | null;
-          vehicle_requests?: {
-            purpose?: string;
-            pickup_at?: string;
-            requester_name?: string;
-          } | null;
-        }[]
-      >("/api/trips/active"),
+    queryFn: () => apiGet<TripRecord[]>("/api/trips/active"),
   });
 }
 
@@ -358,7 +368,15 @@ export type FleetTripRow = {
     reference?: string;
     purpose?: string;
     pickup_at?: string;
+    passenger_count?: number;
     requester_name?: string;
+    requester_phone?: string;
+    request_route_points?: {
+      name: string;
+      address?: string | null;
+      point_type: string;
+      sequence?: number;
+    }[];
   } | null;
 };
 
@@ -524,6 +542,7 @@ export interface NewRequestInput {
   passengerCount: number;
   pickupAt: string;
   expectedEndAt: string;
+  journeyDate?: string;
   isRoundTrip: boolean;
   returnPickupAt: string | null;
   returnExpectedEndAt: string | null;
@@ -654,7 +673,16 @@ export function useAdminEmployee(profileId: string) {
     queryFn: () =>
       apiGet<{
         profile: UserProfile & { department_name?: string; department_code?: string };
-        requests: { id: string; reference: string; purpose: string; status: string; pickup_at: string; passenger_count: number }[];
+        requests: {
+          id: string;
+          reference: string;
+          purpose: string;
+          status: string;
+          pickup_at: string;
+          passenger_count: number;
+          vehicles?: { name?: string; registration_number?: string } | null;
+          drivers?: { full_name?: string; phone?: string } | null;
+        }[];
       }>(`/api/admin/employees/${profileId}`),
   });
 }

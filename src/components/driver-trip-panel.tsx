@@ -1,15 +1,17 @@
 import { Link } from "@tanstack/react-router";
 import { useRef } from "react";
-import { ArrowLeft, Car } from "lucide-react";
+import { ArrowLeft, Navigation, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { LiveTripMap } from "@/components/live-trip-map";
+import { WhenBanner, WhenStamp } from "@/components/info-blocks";
 import { LookupChip } from "@/components/lookup-chip";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { useAdvanceTrip, usePingTripLocation } from "@/lib/queries";
-import { formatDateTime, nextDriverActions } from "@/lib/fleet";
-import { formatPickupLabel, pointTone, trackFocusIndex } from "@/lib/ride-detail";
+import { nextDriverActions } from "@/lib/fleet";
+import { formatBdPhone } from "@/lib/phone";
+import { pointTone, trackFocusIndex } from "@/lib/ride-detail";
 import type { LatLng } from "@/lib/osm";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +45,13 @@ type DriverTrip = {
   } | null;
 };
 
+type Pax = {
+  id?: string;
+  full_name: string;
+  phone?: string | null;
+  is_primary?: boolean;
+};
+
 function actionCopy(
   t: (key: MessageKey, vars?: Record<string, string | number>) => string,
   action: string,
@@ -66,6 +75,10 @@ function actionCopy(
   return { label: t(labelKey), hint: t(hintKey) };
 }
 
+/**
+ * Driver trip detail — road-first:
+ * When → next stop → passengers + call → map → route (collapsed) → one big CTA
+ */
 export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
   const { t } = useI18n();
   const advance = useAdvanceTrip();
@@ -78,10 +91,13 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
   const hasStops = points.some((p) => p.point_type === "stop");
   const actions = nextDriverActions(trip.status, hasStops, request?.is_round_trip ?? false);
   const focusIdx = trackFocusIndex(trip.status, points, trip.current_stop_index ?? 0);
+  const nextStop = points[focusIdx] ?? points[0];
   const isActive = !["completed", "cancelled", "breakdown"].includes(trip.status);
+  const plate = trip.vehicles?.registration_number ?? trip.vehicles?.name;
+  const paxCount = request?.passenger_count;
 
   const namedPassengers = (request?.request_passengers ?? []).filter((p) => p.full_name?.trim());
-  const passengers =
+  const passengers: Pax[] =
     namedPassengers.length > 0
       ? namedPassengers
       : request?.requester_name
@@ -93,6 +109,13 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
             },
           ]
         : [];
+
+  const callTargets = passengers.filter((p) => !!p.phone?.trim());
+  const primaryAction = actions.find((a) => a.primary) ?? actions[0];
+  const secondaryActions = actions.filter((a) => a !== primaryAction);
+  const primaryCopy = primaryAction
+    ? actionCopy(t, primaryAction.action, trip.status, hasStops)
+    : null;
 
   function handlePosition(pos: LatLng) {
     lastPos.current = pos;
@@ -123,7 +146,12 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
   }));
 
   return (
-    <div className={cn("plan-ride ride-detail ride-detail--driver", isActive && "ride-detail--driver-active")}>
+    <div
+      className={cn(
+        "plan-ride ride-detail ride-detail--driver",
+        isActive && "ride-detail--driver-active",
+      )}
+    >
       <header className="plan-ride__top">
         <Link to="/my-trips" className="plan-ride__back" aria-label={t("driver.detail.back")}>
           <ArrowLeft className="size-5" />
@@ -132,148 +160,159 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
         <span className="plan-ride__top-spacer" aria-hidden />
       </header>
 
-      <div className="ride-detail__ref">
-        <span className="ride-detail__ref-code">{trip.reference}</span>
+      <div className="driver-trip__status-row">
         <LookupChip group="trip_status" value={trip.status} pill />
+        <span className="driver-trip__ref">{trip.reference}</span>
       </div>
 
-      <div className="plan-ride__pills">
-        {request?.pickup_at ? (
-          <span className="plan-ride__pill">
-            <span className="truncate">{formatPickupLabel(request.pickup_at)}</span>
-          </span>
-        ) : null}
-        <span className="plan-ride__pill">
-          <span className="truncate">
-            {request?.passenger_count ?? 0}{" "}
-            {(request?.passenger_count ?? 0) === 1 ? "passenger" : "passengers"}
-          </span>
-        </span>
-        {trip.vehicles?.name ? (
-          <span className="plan-ride__pill">
-            <span className="truncate">{trip.vehicles.name}</span>
-          </span>
-        ) : null}
-      </div>
+      {request?.pickup_at ? <WhenBanner at={request.pickup_at} className="driver-trip__when" /> : null}
 
-      <div className="plan-ride__route-wrap">
-        <div className="plan-ride__route">
-          {points.length === 0 ? (
-            <p className="ride-detail__muted p-3">No route points.</p>
-          ) : (
-            points.map((p, i) => (
-              <div key={`${p.point_type}-${i}`} className="plan-ride__stop">
-                <span className={cn("plan-ride__dot", `plan-ride__dot--${pointTone(p.point_type)}`)} />
-                <span className="min-w-0 flex-1">
-                  <span className="plan-ride__stop-name">{p.name}</span>
-                  {p.address ? <span className="plan-ride__stop-addr">{p.address}</span> : null}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      {request?.purpose ? (
-        <div className="ride-detail__purpose">
-          <p className="ride-detail__purpose-label">Purpose</p>
-          <p className="ride-detail__purpose-text">{request.purpose}</p>
-        </div>
-      ) : null}
-
-      {passengers.length > 0 ? (
-        <section className="ride-detail__card">
-          <p className="ride-detail__card-title">
-            Passengers · {request?.passenger_count ?? passengers.length}
-          </p>
-          <ul className="ride-detail__pax-list">
-            {passengers.map((p, i) => (
-              <li key={p.id ?? `${p.full_name}-${i}`} className="ride-detail__pax-row">
-                <span className="ride-detail__assign-name">{p.full_name}</span>
-                {p.phone ? (
-                  <a href={`tel:${p.phone}`} className="ride-detail__assign-sub ride-detail__who-phone">
-                    {p.phone}
-                  </a>
-                ) : (
-                  <span className="ride-detail__assign-sub">No phone</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {mapPoints.length > 0 ? (
-        <section className="ride-detail__map">
-          <LiveTripMap
-            mapOnly
-            className="ride-detail__map-el"
-            points={mapPoints}
-            focusIndex={focusIdx}
-            live={isActive}
-            {...(isActive ? { onPosition: handlePosition } : {})}
-            markerLabel="Your location"
-          />
-        </section>
-      ) : null}
-
-      <section className="ride-detail__card">
-        <p className="ride-detail__card-title">{t("driver.panel.vehicle")}</p>
-        <div className="ride-detail__assign-row">
-          <span className="ride-detail__assign-icon">
-            <Car className="size-4" />
-          </span>
-          <span className="min-w-0">
-            {trip.vehicle_id ? (
-              <Link
-                to="/fleet/$vehicleId"
-                params={{ vehicleId: trip.vehicle_id }}
-                className="ride-detail__assign-name ride-detail__link"
-              >
-                {trip.vehicles?.name ?? t("driver.panel.viewVehicle")}
-              </Link>
-            ) : (
-              <span className="ride-detail__assign-name">{trip.vehicles?.name ?? "—"}</span>
-            )}
-            <span className="ride-detail__assign-sub">
-              {trip.vehicles?.registration_number ?? "—"}
-              {request?.passenger_count != null
-                ? ` · ${request.passenger_count} pax`
-                : ""}
-            </span>
-          </span>
-        </div>
-        <p className="ride-detail__assign-meta">
-          {t("driver.panel.assigned", { when: formatDateTime(trip.created_at) })}
-        </p>
-      </section>
-
-      {isActive ? (
-        <div className="ride-detail__driver-actions">
-          <p className="ride-detail__card-title">{t("driver.panel.progress")}</p>
-          <div className="ride-detail__action-stack">
-            {actions.map((a) => {
-              const copy = actionCopy(t, a.action, trip.status, hasStops);
-              return (
-                <Button
-                  key={a.action}
-                  variant={a.primary ? "default" : "outline"}
-                  className={cn(
-                    "ride-detail__action-btn",
-                    a.primary && "ride-detail__action-btn--primary",
-                  )}
-                  disabled={advance.isPending}
-                  tooltip={copy.hint}
-                  onClick={() => runAction(a.action, copy.label)}
-                >
-                  {copy.label}
-                </Button>
-              );
-            })}
-            {actions.length === 0 ? (
-              <p className="ride-detail__muted">{t("driver.panel.noActions")}</p>
+      {nextStop && isActive ? (
+        <section className="driver-trip__next" aria-label="Next stop">
+          <div className="driver-trip__next-icon" aria-hidden>
+            <Navigation className="size-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="driver-trip__next-label">Next stop</p>
+            <p className="driver-trip__next-name">{nextStop.name}</p>
+            {nextStop.address ? <p className="driver-trip__next-addr">{nextStop.address}</p> : null}
+            {nextStop.expected_at ? (
+              <p className="driver-trip__next-due">
+                Due <WhenStamp at={nextStop.expected_at} withRelative />
+              </p>
             ) : null}
           </div>
+        </section>
+      ) : null}
+
+      <div className="ride-detail__desk driver-trip__desk">
+        <div className="ride-detail__desk-main driver-trip__main">
+          {passengers.length > 0 ? (
+            <section className="driver-trip__people">
+              <p className="driver-trip__section-label">
+                Passenger{passengers.length > 1 ? "s" : ""}
+                {paxCount != null ? ` · ${paxCount}` : ""}
+              </p>
+              <ul className="driver-trip__pax-list">
+                {passengers.map((p, i) => (
+                  <li key={p.id ?? `${p.full_name}-${i}`} className="driver-trip__pax">
+                    <span className="driver-trip__pax-name">{p.full_name}</span>
+                    {!p.phone ? <span className="driver-trip__pax-miss">No phone</span> : null}
+                  </li>
+                ))}
+              </ul>
+              {isActive && callTargets.length > 0 ? (
+                <div
+                  className={cn(
+                    "driver-trip__calls",
+                    callTargets.length > 1 && "driver-trip__calls--split",
+                  )}
+                >
+                  {callTargets.map((p, i) => (
+                    <a
+                      key={p.id ?? `call-${i}`}
+                      href={`tel:${p.phone}`}
+                      className="driver-trip__call"
+                    >
+                      <Phone className="size-4 shrink-0" />
+                      <span className="driver-trip__call-text">
+                        Call {p.full_name.split(" ")[0] || "passenger"}
+                      </span>
+                      <span className="driver-trip__call-num">{formatBdPhone(p.phone!)}</span>
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          {points.length > 0 ? (
+            <details className="driver-trip__route">
+              <summary className="driver-trip__route-sum">
+                Full route · {points.length} stops
+              </summary>
+              <div className="plan-ride__route">
+                {points.map((p, i) => (
+                  <div
+                    key={`${p.point_type}-${i}`}
+                    className={cn("plan-ride__stop", i === focusIdx && "plan-ride__stop--focus")}
+                  >
+                    <span className={cn("plan-ride__dot", `plan-ride__dot--${pointTone(p.point_type)}`)} />
+                    <span className="min-w-0 flex-1">
+                      <span className="plan-ride__stop-name">
+                        {p.name}
+                        {i === focusIdx && isActive ? (
+                          <span className="plan-ride__stop-now"> · now</span>
+                        ) : null}
+                      </span>
+                      {p.address ? <span className="plan-ride__stop-addr">{p.address}</span> : null}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          ) : null}
+
+          {[plate, paxCount != null ? `${paxCount} pax` : null, request?.purpose].some(Boolean) ? (
+            <p className="driver-trip__meta">
+              {[plate, paxCount != null ? `${paxCount} pax` : null, request?.purpose]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          ) : null}
+        </div>
+
+        {mapPoints.length > 0 ? (
+          <aside className="ride-detail__desk-aside driver-trip__aside" aria-label="Live map">
+            <section className="ride-detail__map driver-trip__map">
+              <LiveTripMap
+                mapOnly
+                className="ride-detail__map-el driver-trip__map-el"
+                points={mapPoints}
+                focusIndex={focusIdx}
+                live={isActive}
+                {...(isActive ? { onPosition: handlePosition } : {})}
+                markerLabel="Your location"
+              />
+            </section>
+          </aside>
+        ) : null}
+      </div>
+
+      {isActive ? (
+        <div className="ride-detail__driver-actions driver-trip__actions">
+          {primaryAction && primaryCopy ? (
+            <Button
+              variant="default"
+              className="ride-detail__action-btn ride-detail__action-btn--primary driver-trip__cta"
+              disabled={advance.isPending}
+              tooltip={primaryCopy.hint}
+              onClick={() => runAction(primaryAction.action, primaryCopy.label)}
+            >
+              {primaryCopy.label}
+            </Button>
+          ) : (
+            <p className="ride-detail__muted">{t("driver.panel.noActions")}</p>
+          )}
+          {secondaryActions.length > 0 ? (
+            <div className="driver-trip__secondary">
+              {secondaryActions.map((a) => {
+                const copy = actionCopy(t, a.action, trip.status, hasStops);
+                return (
+                  <Button
+                    key={a.action}
+                    variant="outline"
+                    className="ride-detail__action-btn"
+                    disabled={advance.isPending}
+                    tooltip={copy.hint}
+                    onClick={() => runAction(a.action, copy.label)}
+                  >
+                    {copy.label}
+                  </Button>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
