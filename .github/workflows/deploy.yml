@@ -1,0 +1,31 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGE_HOST }}
+          username: ${{ secrets.STAGE_USER }}
+          key: ${{ secrets.STAGE_KEY }}
+          script: |
+            set -e
+
+            cd /var/www/vms/frontend
+            git fetch origin
+            git reset --hard origin/main
+
+            cd /var/www/vms
+
+            docker compose pull || true
+            docker compose up -d --build
+
+            docker image prune -af
