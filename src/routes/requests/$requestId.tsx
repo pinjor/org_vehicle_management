@@ -7,9 +7,9 @@ import { useAuth } from "@/lib/auth";
 export const Route = createFileRoute("/requests/$requestId")({
   head: () => ({
     meta: [
-      { title: "Request detail — FleetOps" },
+      { title: "Request detail — Vehicle Management System" },
       { name: "description", content: "Full request record: route, passengers, assignment, trip progress and audit trail." },
-      { property: "og:title", content: "Request detail — FleetOps" },
+      { property: "og:title", content: "Request detail — Vehicle Management System" },
       { property: "og:description", content: "Review, approve and dispatch an individual vehicle request." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

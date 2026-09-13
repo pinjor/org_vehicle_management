@@ -4,7 +4,7 @@ export function renderErrorPage(): string {
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Couldn't load — FleetOps</title>
+    <title>Couldn't load — Vehicle Management System</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -90,7 +90,7 @@ export function renderErrorPage(): string {
         </svg>
       </div>
       <div class="card">
-        <div class="brand"><span class="mark" aria-hidden="true">FO</span><span>FleetOps</span></div>
+        <div class="brand"><span class="mark" aria-hidden="true">VM</span><span>Vehicle Management System</span></div>
         <p class="code">Detour</p>
         <h1>Couldn't load this page</h1>
         <p>Something stalled on our side. Try again, or head home and continue from there.</p>

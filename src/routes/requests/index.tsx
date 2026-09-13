@@ -15,9 +15,9 @@ import { useRequests } from "@/lib/queries";
 export const Route = createFileRoute("/requests/")({
   head: () => ({
     meta: [
-      { title: "Vehicle requests — FleetOps" },
+      { title: "Vehicle requests — Vehicle Management System" },
       { name: "description", content: "Track every vehicle request from submission through approval, dispatch and completion." },
-      { property: "og:title", content: "Vehicle requests — FleetOps" },
+      { property: "og:title", content: "Vehicle requests — Vehicle Management System" },
       { property: "og:description", content: "Browse, filter and open vehicle requests across departments." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

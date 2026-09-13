@@ -97,14 +97,19 @@ export function EmployeeRideHome() {
             params={{ requestId: banner.id }}
             className="ride-home__active-main"
           >
-            <WhenRail at={banner.pickup_at} size="sm" />
-            <div className="ride-home__active-body min-w-0 flex-1">
-              <p className="ride-home__active-label">
-                {isLive ? "Active" : "Pending"}
-              </p>
-              <p className="ride-home__active-title">
-                {routeLineCompact(banner.request_route_points) ?? banner.purpose ?? "Your trip"}
-              </p>
+            <WhenRail at={banner.pickup_at} size="sm" className="ride-home__when" />
+            <div className="ride-home__active-body min-w-0">
+              <div className="ride-home__active-top">
+                <div className="min-w-0 flex-1">
+                  <p className="ride-home__active-label">
+                    {isLive ? "Active" : "Pending"}
+                  </p>
+                  <p className="ride-home__active-title">
+                    {routeLineCompact(banner.request_route_points) ?? banner.purpose ?? "Your trip"}
+                  </p>
+                </div>
+                <LookupChip group="request_status" value={banner.status} />
+              </div>
               {isLive && banner.drivers?.full_name ? (
                 <div className="ride-home__driver">
                   <p className="ride-home__driver-name">{banner.drivers.full_name}</p>
@@ -114,23 +119,14 @@ export function EmployeeRideHome() {
                   {banner.vehicles?.registration_number ? (
                     <div className="ride-home__driver-meta">
                       <span>{banner.vehicles.registration_number}</span>
-                      <span className="ride-home__driver-meta-sep">·</span>
-                      <LookupChip group="request_status" value={banner.status} />
                     </div>
-                  ) : (
-                    <div className="mt-1">
-                      <LookupChip group="request_status" value={banner.status} />
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  <LookupChip group="request_status" value={banner.status} />
-                  {!isLive ? (
-                    <MetaChip label={passengerLabel(banner.passenger_count)} tone="neutral" />
                   ) : null}
                 </div>
-              )}
+              ) : !isLive ? (
+                <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                  <MetaChip label={passengerLabel(banner.passenger_count)} tone="neutral" />
+                </div>
+              ) : null}
             </div>
             <span className="ride-home__active-cta">
               {isLive ? "Track" : "View"}

@@ -53,7 +53,7 @@ function rasterStyle(
 }
 
 export const FREE_MAP_STYLE: StyleSpecification = rasterStyle(
-  "FleetOps OSM.fr",
+  "Vehicle Management System OSM.fr",
   [
     "https://a.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
     "https://b.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
@@ -64,7 +64,7 @@ export const FREE_MAP_STYLE: StyleSpecification = rasterStyle(
 );
 
 const FREE_MAP_STYLE_ESRI: StyleSpecification = rasterStyle(
-  "FleetOps Esri",
+  "Vehicle Management System Esri",
   [
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
   ],

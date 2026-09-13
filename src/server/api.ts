@@ -1208,7 +1208,7 @@ app.post("/api/drivers", async (c) => {
 });
 
 // ——— Geocoding (Nominatim proxy — avoids browser CORS / rate limits) ———
-const NOMINATIM_UA = "FleetOps/1.0 (org-vehicle-management)";
+const NOMINATIM_UA = "Vehicle Management System/1.0 (org-vehicle-management)";
 
 app.get("/api/geocode/search", async (c) => {
   requireUser(c);

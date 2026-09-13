@@ -11,8 +11,11 @@ export PGPASSWORD="${PGPASSWORD:-fleetops}"
 if docker ps --format '{{.Names}}' 2>/dev/null | grep -q 'org_vehicle_management-postgres-1'; then
   docker exec -i org_vehicle_management-postgres-1 psql -U fleetops -d fleetops \
     < "$ROOT/database/seed_starter.sql"
+  docker exec -i org_vehicle_management-postgres-1 psql -U fleetops -d fleetops \
+    < "$ROOT/database/seed_demo_accounts.sql"
 else
   psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -f "$ROOT/database/seed_starter.sql"
+  psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -f "$ROOT/database/seed_demo_accounts.sql"
 fi
 
-echo "Starter seed applied (admin +8801711000001, employees, drivers, vehicles)."
+echo "Starter + demo accounts applied (admin123 / emp123 / driver123)."

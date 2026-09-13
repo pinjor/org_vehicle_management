@@ -1,4 +1,4 @@
-# FleetOps — app (TanStack Start + Hono API) + built for Node
+# Vehicle Management System — app (TanStack Start + Hono API) + built for Node
 FROM node:22-alpine AS builder
 
 WORKDIR /app

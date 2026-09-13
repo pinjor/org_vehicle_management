@@ -2,6 +2,7 @@ import { Link, type LinkProps } from "@tanstack/react-router";
 import { ChevronRight, Phone } from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
+import { AdminPendingActions } from "@/components/admin-pending-actions";
 import { LookupChip } from "@/components/lookup-chip";
 import { StatusChip } from "@/components/fleet-ui";
 import { WhenRail } from "@/components/info-blocks";
@@ -139,7 +140,6 @@ function OpsBody({
             {routeBlock}
           </>
         )}
-
         {meta ? <div className="ops-card__meta">{meta}</div> : null}
         {reference ? <p className="ops-card__ref">{reference}</p> : null}
       </div>
@@ -418,7 +418,7 @@ export function EmployeeRequestCard({
   );
 }
 
-/** Admin request — parties once; route once. No call bar. */
+/** Admin request — parties once; route once. Approve + Assign on pending. */
 export function AdminRequestCard({
   request,
   trailing,
@@ -436,6 +436,7 @@ export function AdminRequestCard({
   const plate = request.vehicles?.registration_number ?? request.vehicles?.name;
   const assigned = !!(driverName || plate);
   const title = purposeTitle(request.purpose, request.reference);
+  const pendingActions = !assigned && ["submitted", "approved"].includes(request.status);
 
   const people: Person[] = [
     {
@@ -464,6 +465,7 @@ export function AdminRequestCard({
     <OpsCardShell
       to="/requests/$requestId"
       params={{ requestId: request.id }}
+      {...(pendingActions ? { footer: <AdminPendingActions request={request} /> } : {})}
       {...(trailing != null ? { trailing } : {})}
       {...(className ? { className } : {})}
     >
@@ -531,7 +533,7 @@ export function LiveTripCard({ trip }: { trip: TripRecord }) {
     >
       <OpsBody
         when={pickupAt ?? null}
-        label={live ? "Live" : "Done"}
+        label={live ? "Live" : undefined}
         title={title}
         badges={<LookupChip group="trip_status" value={trip.status} />}
         people={people}

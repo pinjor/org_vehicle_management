@@ -1,6 +1,6 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { formatDate, formatTime, relativeTime } from "@/lib/fleet";
+import { daysLeftLabel, formatDate, formatTime, formatWeekday, relativeTime } from "@/lib/fleet";
 import { routeLine, type RoutePointLike } from "@/lib/route-summary";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +17,7 @@ export function formatCardDate(value?: string | null) {
   });
 }
 
-/** Highlighted pickup clock — date first, then time (same size), then relative. */
+/** Highlighted pickup clock — weekday, date, time, days left (full-height left rail on cards). */
 export function WhenRail({
   at,
   className,
@@ -28,15 +28,17 @@ export function WhenRail({
   size?: "sm" | "md" | "lg";
 }) {
   if (!at) return null;
-  const rel = relativeTime(at);
+  const dow = formatWeekday(at);
+  const days = daysLeftLabel(at);
   return (
     <div
       className={cn("when-rail", size === "sm" && "when-rail--sm", size === "lg" && "when-rail--lg", className)}
-      aria-label={`Pickup ${formatDate(at)} ${formatTime(at)}`}
+      aria-label={`Pickup ${dow} ${formatDate(at)} ${formatTime(at)}${days ? `, ${days}` : ""}`}
     >
+      {dow ? <span className="when-rail__dow">{dow}</span> : null}
       <span className="when-rail__date">{formatCardDate(at)}</span>
       <span className="when-rail__time">{formatTime(at)}</span>
-      {rel ? <span className="when-rail__rel">{rel}</span> : null}
+      {days ? <span className="when-rail__rel">{days}</span> : null}
     </div>
   );
 }
@@ -164,13 +166,15 @@ export function TripListRow({
 }) {
   const body = (
     <div className={cn("trip-list-row", className)}>
-      <WhenRail at={when ?? null} size="sm" />
-      <div className="trip-list-row__body">
-        <div className="trip-list-row__text">
-          <p className="trip-list-row__title">{title}</p>
-          {subtitle ? <p className="trip-list-row__sub">{subtitle}</p> : null}
+      <WhenRail at={when ?? null} size="sm" className="trip-list-row__when" />
+      <div className="trip-list-row__content min-w-0">
+        <div className="trip-list-row__head">
+          <div className="trip-list-row__text">
+            <p className="trip-list-row__title">{title}</p>
+          </div>
+          {end ? <div className="trip-list-row__end">{end}</div> : null}
         </div>
-        {end ? <div className="trip-list-row__end">{end}</div> : null}
+        {subtitle ? <p className="trip-list-row__sub">{subtitle}</p> : null}
       </div>
     </div>
   );

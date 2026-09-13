@@ -26,8 +26,8 @@ function NotFoundComponent() {
     <StatusScreen
       code="404 · missing stop"
       title="This route isn't on the map"
-      description="The page you asked for isn't in FleetOps — it may have moved, or the link is outdated."
-      primaryAction={<StatusPrimaryButton href="/">Back to FleetOps</StatusPrimaryButton>}
+      description="The page you asked for isn't in Vehicle Management System — it may have moved, or the link is outdated."
+      primaryAction={<StatusPrimaryButton href="/">Back to Vehicle Management System</StatusPrimaryButton>}
     />
   );
 }
@@ -64,13 +64,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "FleetOps — Vehicle Request & Dispatch" },
+      { title: "Vehicle Management System" },
       {
         name: "description",
         content:
           "Enterprise vehicle requests, intelligent dispatch matching and live fleet operations in one console.",
       },
-      { property: "og:title", content: "FleetOps — Vehicle Request & Dispatch" },
+      { property: "og:title", content: "Vehicle Management System" },
       {
         property: "og:description",
         content: "Request vehicles, match drivers intelligently and track every trip in real time.",

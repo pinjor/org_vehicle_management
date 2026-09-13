@@ -393,9 +393,11 @@ export function AppShell({
           <AppIcon className="app-sidebar-logo" />
           {!sidebarCollapsed && (
             <div className="app-sidebar-brand-text">
-              <p className="truncate text-sm font-bold tracking-tight">FleetOps</p>
+              <p className="text-sm font-bold tracking-tight leading-snug text-balance">
+                Vehicle Management System
+              </p>
               <p className="truncate text-[11px] text-sidebar-foreground/55">
-                {isDriverPortal ? t("shell.vehicleMgmt") : "FleetOps"}
+                {isDriverPortal ? "Driver portal" : "Requests & dispatch"}
               </p>
             </div>
           )}
@@ -852,7 +854,7 @@ export function AppShell({
             <SheetHeader className="app-sidebar-brand border-0 p-0 text-left shadow-none">
               <AppIcon className="app-sidebar-logo" />
               <div className="app-sidebar-brand-text min-w-0">
-                <SheetTitle className="text-sm font-bold">FleetOps</SheetTitle>
+                <SheetTitle className="text-sm font-bold">Vehicle Management System</SheetTitle>
                 <p className="truncate text-left text-xs text-sidebar-foreground/55">
                   {profile?.full_name ?? (isDriverPortal ? t("shell.signedIn") : "Signed in")}
                   {displayPhone ? ` · ${formatBdPhone(displayPhone)}` : ""}

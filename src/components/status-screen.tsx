@@ -44,7 +44,7 @@ export function StatusScreen({
       <div className="status-screen__card">
         <div className="status-screen__brand">
           <AppIcon className="size-9" />
-          <span>FleetOps</span>
+          <span>Vehicle Management System</span>
         </div>
 
         {code ? <p className="status-screen__code">{code}</p> : null}

@@ -6,13 +6,13 @@ import { useAuth } from "@/lib/auth";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "FleetOps — Vehicle Request & Dispatch Console" },
+      { title: "Vehicle Management System" },
       {
         name: "description",
         content:
           "Raise multi-stop vehicle requests, match drivers with a scoring engine and track live trips end to end.",
       },
-      { property: "og:title", content: "FleetOps — Vehicle Request & Dispatch Console" },
+      { property: "og:title", content: "Vehicle Management System" },
       {
         property: "og:description",
         content: "Enterprise fleet operations: requests, intelligent dispatch and live trip tracking.",

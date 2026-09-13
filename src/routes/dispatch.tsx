@@ -24,7 +24,7 @@ const DEFAULT_COLLAPSED: DispatchSections = {
 export const Route = createFileRoute("/dispatch")({
   head: () => ({
     meta: [
-      { title: "Dispatch console — FleetOps" },
+      { title: "Dispatch console — Vehicle Management System" },
       {
         name: "description",
         content:

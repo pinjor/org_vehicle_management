@@ -17,9 +17,9 @@ import { DRIVER_STATUS, SHIFT, formatDate, complianceTone, daysUntil } from "@/l
 export const Route = createFileRoute("/drivers/")({
   head: () => ({
     meta: [
-      { title: "Driver roster — FleetOps" },
+      { title: "Driver roster — Vehicle Management System" },
       { name: "description", content: "Driver roster with licence validity, vehicle categories, shifts and availability." },
-      { property: "og:title", content: "Driver roster — FleetOps" },
+      { property: "og:title", content: "Driver roster — Vehicle Management System" },
       { property: "og:description", content: "Licences, shifts, ratings and current duty status for every driver." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

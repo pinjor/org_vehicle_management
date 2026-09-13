@@ -14,7 +14,7 @@ export const Route = createFileRoute("/requests/new")({
   validateSearch: (search) => newRequestSearchSchema.parse(search),
   head: () => ({
     meta: [
-      { title: "Plan your ride — FleetOps" },
+      { title: "Plan your ride — Vehicle Management System" },
       { name: "description", content: "Request a one-time ride or round trip with pickup and drop details." },
     ],
   }),

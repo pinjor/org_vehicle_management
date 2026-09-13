@@ -16,7 +16,7 @@ import { useDepartments, useDriver, useProfile, useUpdateProfile } from "@/lib/q
 export const Route = createFileRoute("/profile")({
   head: () => ({
     meta: [
-      { title: "My profile — FleetOps" },
+      { title: "My profile — Vehicle Management System" },
       { name: "description", content: "Your account details and contact information." },
     ],
   }),

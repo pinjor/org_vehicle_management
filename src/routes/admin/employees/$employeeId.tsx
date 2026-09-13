@@ -21,7 +21,7 @@ import { routeLineCompact } from "@/lib/route-summary";
 
 export const Route = createFileRoute("/admin/employees/$employeeId")({
   head: () => ({
-    meta: [{ title: "Employee profile — FleetOps" }],
+    meta: [{ title: "Employee profile — Vehicle Management System" }],
   }),
   component: EmployeeProfilePage,
 });

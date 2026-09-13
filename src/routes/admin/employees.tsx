@@ -12,7 +12,7 @@ import { ClipboardList, UserCheck, Users } from "lucide-react";
 
 export const Route = createFileRoute("/admin/employees")({
   head: () => ({
-    meta: [{ title: "Employees — FleetOps" }],
+    meta: [{ title: "Employees — Vehicle Management System" }],
   }),
   component: AdminEmployeesPage,
 });

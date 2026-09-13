@@ -1,8 +1,8 @@
-# FleetOps
+# Vehicle Management System
 
 Enterprise vehicle request, dispatch, and fleet operations app for organizations that run their own vehicles and drivers.
 
-Product UI name: **FleetOps**. Original product brief / master prompt lives in [`PROJECT_PROMPT.md`](./PROJECT_PROMPT.md). Session work log: [`../PROJECT_LOG.md`](../PROJECT_LOG.md).
+Product UI name: **Vehicle Management System**. Original product brief / master prompt lives in [`PROJECT_PROMPT.md`](./PROJECT_PROMPT.md). Session work log: [`../PROJECT_LOG.md`](../PROJECT_LOG.md).
 
 ## Stack
 

@@ -147,24 +147,43 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
             <span className="admin-req__pill">{tripType.label}</span>
           </div>
           {canDecide && user ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="ride-detail__reject-pill h-8 shrink-0"
-              disabled={decide.isPending}
-              onClick={() =>
-                decide.mutate(
-                  { requestId, approve: false, actorId: user.id },
-                  {
-                    onSuccess: () => toast.success("Request rejected"),
-                    onError: (e) => toast.error(e.message),
-                  },
-                )
-              }
-            >
-              Reject
-            </Button>
+            <div className="admin-pending__row shrink-0">
+              <Button
+                type="button"
+                size="sm"
+                className="h-8"
+                disabled={decide.isPending}
+                onClick={() =>
+                  decide.mutate(
+                    { requestId, approve: true, actorId: user.id },
+                    {
+                      onSuccess: () => toast.success("Request approved"),
+                      onError: (e) => toast.error(e.message),
+                    },
+                  )
+                }
+              >
+                Approve
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="ride-detail__reject-pill h-8"
+                disabled={decide.isPending}
+                onClick={() =>
+                  decide.mutate(
+                    { requestId, approve: false, actorId: user.id },
+                    {
+                      onSuccess: () => toast.success("Request rejected"),
+                      onError: (e) => toast.error(e.message),
+                    },
+                  )
+                }
+              >
+                Reject
+              </Button>
+            </div>
           ) : null}
         </div>
 
@@ -329,7 +348,7 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
 
             {canAssign ? (
               <section className="admin-req__card admin-req__card--assign">
-                <p className="admin-req__section-label">Assign</p>
+                <p className="admin-req__section-label">Assign driver</p>
                 <AssignmentPanel
                   requestId={requestId}
                   passengers={request.passenger_count}

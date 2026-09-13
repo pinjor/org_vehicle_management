@@ -13,8 +13,20 @@ do $$ declare t text; begin
   end loop;
 end $$;
 
+-- Local auth uses public.app_users (no raw_user_meta_data). Supabase migrations
+-- attach handle_new_user which reads that column — drop it and replace with a no-op
+-- so a recreate never breaks signup again.
 drop trigger if exists on_auth_user_created on public.app_users;
-drop function if exists public.handle_new_user();
+drop trigger if exists on_auth_user_created on auth.users;
+
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  -- Profile / roles are created by the Node signup API, not this trigger.
+  return new;
+end;
+$$;
+
 drop function if exists public.assign_request(uuid, uuid, uuid, uuid);
 
 create or replace function public.assign_request(_request_id uuid, _vehicle_id uuid, _driver_id uuid, _actor uuid)

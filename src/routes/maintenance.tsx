@@ -14,13 +14,13 @@ import { SEVERITY, UNAVAILABILITY_STATUS } from "@/lib/fleet";
 export const Route = createFileRoute("/maintenance")({
   head: () => ({
     meta: [
-      { title: "Maintenance desk — FleetOps" },
+      { title: "Maintenance desk — Vehicle Management System" },
       {
         name: "description",
         content:
           "Review vehicle unavailability reports, send vehicles to maintenance and return them to service.",
       },
-      { property: "og:title", content: "Maintenance desk — FleetOps" },
+      { property: "og:title", content: "Maintenance desk — Vehicle Management System" },
       { property: "og:description", content: "Approve breakdown reports and manage vehicle downtime." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -71,8 +71,7 @@ function MaintenancePage() {
                 })
                 .map((r) => (
                 <li key={r.id} className="px-3 py-3 sm:px-4">
-                  <div className="grid grid-cols-[auto_1fr] gap-3">
-                    <WhenRail at={r.created_at} size="sm" />
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="min-w-0">
@@ -164,6 +163,7 @@ function MaintenancePage() {
                         </div>
                       ) : null}
                     </div>
+                    <WhenRail at={r.created_at} size="sm" />
                   </div>
                 </li>
               ))}

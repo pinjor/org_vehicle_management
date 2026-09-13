@@ -35,7 +35,7 @@ import { routeLineCompact } from "@/lib/route-summary";
 
 export const Route = createFileRoute("/drivers/$driverId")({
   head: ({ params }) => ({
-    meta: [{ title: `Driver profile — FleetOps` }, { name: "description", content: `Driver record ${params.driverId}.` }],
+    meta: [{ title: `Driver profile — Vehicle Management System` }, { name: "description", content: `Driver record ${params.driverId}.` }],
   }),
   component: DriverProfilePage,
 });

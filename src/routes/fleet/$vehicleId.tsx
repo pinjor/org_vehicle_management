@@ -40,7 +40,7 @@ import {
 
 export const Route = createFileRoute("/fleet/$vehicleId")({
   head: ({ params }) => ({
-    meta: [{ title: `Vehicle profile — FleetOps` }, { name: "description", content: `Vehicle record ${params.vehicleId}.` }],
+    meta: [{ title: `Vehicle profile — Vehicle Management System` }, { name: "description", content: `Vehicle record ${params.vehicleId}.` }],
   }),
   component: VehicleProfilePage,
 });

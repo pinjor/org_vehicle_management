@@ -118,11 +118,17 @@ export async function loginUser(phone: string, password: string) {
 }
 
 export function setSessionCookie(c: Context, token: string) {
+  const forwarded = c.req.header("x-forwarded-proto");
+  const secure =
+    forwarded === "https" ||
+    c.req.url.startsWith("https://") ||
+    process.env.COOKIE_SECURE === "true";
   setCookie(c, COOKIE, token, {
     httpOnly: true,
     sameSite: "Lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 7,
+    ...(secure ? { secure: true } : {}),
   });
 }
 

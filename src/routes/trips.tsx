@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/trips")({
   head: () => ({
     meta: [
-      { title: "Trips — FleetOps" },
+      { title: "Trips — Vehicle Management System" },
       {
         name: "description",
         content: "Pending vehicle requests, live assignments, and completed trips.",

@@ -14,6 +14,6 @@
     <circle cx="111.25" cy="116.25" r="7.25" fill="#BBABED"/>
     <rect x="23.75" y="107.75" width="112.5" height="5.5" rx="1.75" fill="#FC7E3F"/>
   </g>
-  <text x="600" y="430" text-anchor="middle" font-family="system-ui, sans-serif" font-size="48" font-weight="600" fill="#1A2332">FleetOps</text>
+  <text x="600" y="430" text-anchor="middle" font-family="system-ui, sans-serif" font-size="40" font-weight="600" fill="#1A2332">Vehicle Management System</text>
   <text x="600" y="485" text-anchor="middle" font-family="system-ui, sans-serif" font-size="24" fill="#64748B">Vehicle request &amp; dispatch</text>
 </svg>

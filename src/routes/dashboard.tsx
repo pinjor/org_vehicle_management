@@ -21,8 +21,8 @@ import { useDriverTrips, useDrivers, useRequests, useVehicles } from "@/lib/quer
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
     meta: [
-      { title: "Dashboard — FleetOps" },
-      { name: "description", content: "Your FleetOps workspace — requests, trips, or fleet overview." },
+      { title: "Dashboard — Vehicle Management System" },
+      { name: "description", content: "Your Vehicle Management System workspace — requests, trips, or fleet overview." },
     ],
   }),
   component: DashboardPage,
@@ -38,7 +38,7 @@ function DashboardPage() {
 
 function EmployeeDashboard() {
   return (
-    <AppShell title="FleetOps" subtitle="Book a vehicle">
+    <AppShell title="Vehicle Management System" subtitle="Book a vehicle">
       <EmployeeRideHome />
     </AppShell>
   );
@@ -160,7 +160,7 @@ function DispatcherDashboard() {
 
         <Panel
           title="Pending"
-          description="Open a request to assign"
+          description="Approve or assign a driver"
           tone="primary"
           compact
           bodyClassName="p-0"

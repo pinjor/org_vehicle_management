@@ -12,7 +12,7 @@ import { useDriverTrips } from "@/lib/queries";
 export const Route = createFileRoute("/my-trips/$tripId")({
   head: () => ({
     meta: [
-      { title: "Trip — FleetOps" },
+      { title: "Trip — Vehicle Management System" },
       { name: "description", content: "Trip assignment, live map and progress actions." },
     ],
   }),

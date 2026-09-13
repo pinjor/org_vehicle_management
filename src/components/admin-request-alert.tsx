@@ -69,8 +69,7 @@ export function AdminRequestAlert() {
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
-          <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg border border-border bg-muted/30 p-3">
-            <WhenRail at={popup.pickup_at} size="lg" />
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-lg border border-border bg-muted/30 p-3">
             <div className="min-w-0 space-y-2 text-sm">
               <p className="font-semibold leading-snug">{popup.requester_name}</p>
               {popup.requester_phone ? (
@@ -97,12 +96,13 @@ export function AdminRequestAlert() {
                 </span>
               </p>
             </div>
+            <WhenRail at={popup.pickup_at} size="lg" />
           </div>
 
           {canAssign ? (
             <div className="min-w-0 space-y-3 rounded-lg border border-border p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Assign vehicle & driver
+                Assign driver
               </p>
               <AssignmentPanel
                 requestId={popup.id}
@@ -114,23 +114,38 @@ export function AdminRequestAlert() {
                 }}
               />
               {popup.status === "submitted" ? (
-                <Button
-                  variant="outline"
-                  disabled={decide.isPending}
-                  className="btn-reject w-full"
-                  tooltip="Reject request"
-                  onClick={() => {
-                    void decide
-                      .mutateAsync({ requestId: popup.id, approve: false, actorId: user.id })
-                      .then(() => {
-                        toast.success("Request rejected");
-                        setPopup(null);
-                      })
-                      .catch((e: Error) => toast.error(e.message));
-                  }}
-                >
-                  Reject
-                </Button>
+                <div className="admin-pending__row">
+                  <Button
+                    disabled={decide.isPending}
+                    className="flex-1"
+                    tooltip="Approve request"
+                    onClick={() => {
+                      void decide
+                        .mutateAsync({ requestId: popup.id, approve: true, actorId: user.id })
+                        .then(() => toast.success("Request approved"))
+                        .catch((e: Error) => toast.error(e.message));
+                    }}
+                  >
+                    Approve
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={decide.isPending}
+                    className="btn-reject flex-1"
+                    tooltip="Reject request"
+                    onClick={() => {
+                      void decide
+                        .mutateAsync({ requestId: popup.id, approve: false, actorId: user.id })
+                        .then(() => {
+                          toast.success("Request rejected");
+                          setPopup(null);
+                        })
+                        .catch((e: Error) => toast.error(e.message));
+                    }}
+                  >
+                    Reject
+                  </Button>
+                </div>
               ) : null}
             </div>
           ) : null}

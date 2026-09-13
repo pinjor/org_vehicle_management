@@ -16,9 +16,9 @@ import { VEHICLE_STATUS, VEHICLE_CATEGORY_LABELS, categoryTone, formatDate } fro
 export const Route = createFileRoute("/fleet/")({
   head: () => ({
     meta: [
-      { title: "Fleet register — FleetOps" },
+      { title: "Fleet register — Vehicle Management System" },
       { name: "description", content: "Vehicle register with capacity, documents, servicing intervals and live operational status." },
-      { property: "og:title", content: "Fleet register — FleetOps" },
+      { property: "og:title", content: "Fleet register — Vehicle Management System" },
       { property: "og:description", content: "Track every vehicle, its documents and service position." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

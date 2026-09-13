@@ -399,6 +399,14 @@ export function formatTime(value?: string | null) {
   });
 }
 
+/** Short weekday for trip cards — Mon, Tue, … */
+export function formatWeekday(value?: string | null) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-US", { weekday: "long" });
+}
+
 export function formatDate(value?: string | null) {
   if (!value) return "—";
   return new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
@@ -407,6 +415,20 @@ export function formatDate(value?: string | null) {
 export function formatDateTime(value?: string | null) {
   if (!value) return "—";
   return `${formatDate(value)} · ${formatTime(value)}`;
+}
+
+/** Calendar-day countdown for trip cards — "Today", "3 days left", "2 days ago". */
+export function daysLeftLabel(value?: string | null) {
+  if (!value) return "";
+  const target = new Date(value);
+  if (Number.isNaN(target.getTime())) return "";
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(target) - startOfDay(new Date())) / 86_400_000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Tomorrow";
+  if (diffDays === -1) return "Yesterday";
+  if (diffDays > 1) return `${diffDays} days left`;
+  return `${Math.abs(diffDays)} days ago`;
 }
 
 /** "Pickup in 38 minutes" style micro-copy. */

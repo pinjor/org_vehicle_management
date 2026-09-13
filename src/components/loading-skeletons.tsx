@@ -77,17 +77,20 @@ export function PanelSkeleton({ rows = 5, withSearch = false }: { rows?: number;
 export function ListRowSkeleton() {
   return (
     <div className="trip-list-row pointer-events-none" aria-hidden>
-      <div className="flex flex-col gap-1 py-0.5">
-        <Skeleton className="h-4 w-14" />
-        <Skeleton className="h-2.5 w-10" />
+      <div className="trip-list-row__when flex flex-col items-center justify-center gap-1">
+        <Skeleton className="h-3 w-12" />
+        <Skeleton className="h-3 w-10" />
+        <Skeleton className="h-3.5 w-14" />
       </div>
-      <div className="trip-list-row__body">
-        <div className="trip-list-row__text space-y-1.5">
-          <Skeleton className="h-3.5 w-2/5 max-w-[180px]" />
-          <Skeleton className="h-3 w-3/5 max-w-xs" />
-        </div>
-        <div className="trip-list-row__end">
-          <Skeleton className="h-5 w-16 rounded-full" />
+      <div className="trip-list-row__content">
+        <div className="trip-list-row__head">
+          <div className="trip-list-row__text space-y-1.5">
+            <Skeleton className="h-3.5 w-2/5 max-w-[180px]" />
+            <Skeleton className="h-3 w-3/5 max-w-xs" />
+          </div>
+          <div className="trip-list-row__end">
+            <Skeleton className="h-5 w-16 rounded-full" />
+          </div>
         </div>
       </div>
     </div>

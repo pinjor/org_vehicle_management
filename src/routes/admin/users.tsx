@@ -22,7 +22,7 @@ import {
 
 export const Route = createFileRoute("/admin/users")({
   head: () => ({
-    meta: [{ title: "User roster — FleetOps" }],
+    meta: [{ title: "User roster — Vehicle Management System" }],
   }),
   component: AdminUsersPage,
 });

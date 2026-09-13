@@ -73,7 +73,7 @@ function AuthPage() {
   }, [session, navigate]);
 
   useEffect(() => {
-    document.title = view === "signin" ? "Sign in — FleetOps" : "Set password — FleetOps";
+    document.title = view === "signin" ? "Sign in — Vehicle Management System" : "Set password — Vehicle Management System";
   }, [view]);
 
   function goSignIn(clearPhone = false) {
@@ -248,7 +248,7 @@ function AuthPage() {
                 </div>
 
                 <p className="text-center text-sm text-[color:var(--auth-muted)]">
-                  Must be on the admin roster before you can access FleetOps.
+                  Must be on the admin roster before you can access Vehicle Management System.
                 </p>
               </form>
             ) : (
@@ -308,7 +308,7 @@ function AuthPage() {
             <span className="font-medium text-foreground">
               {normalizeBdPhone(phoneLocal) ? `+880 ${phoneLocal}` : phoneLocal}
             </span>{" "}
-            to FleetOps. After that, come back here and continue.
+            to Vehicle Management System. After that, come back here and continue.
           </p>
           <DialogFooter>
             <Button type="button" onClick={() => setNotEnlistedOpen(false)}>

@@ -31,7 +31,7 @@ import {
 
 export const Route = createFileRoute("/admin/settings")({
   head: () => ({
-    meta: [{ title: "Settings — FleetOps" }],
+    meta: [{ title: "Settings — Vehicle Management System" }],
   }),
   component: AdminSettingsPage,
 });
