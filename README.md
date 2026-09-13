@@ -19,7 +19,8 @@ cd org_vehicle_management
 npm run docker:up
 ```
 
-App: [http://localhost:3000](http://localhost:3000)  
+App: [https://vms.apptriangle.com](https://vms.apptriangle.com/) (production)  
+Local Docker: [http://localhost:3000](http://localhost:3000)  
 Postgres: `localhost:5433` · Redis: `localhost:6379`
 
 ```bash

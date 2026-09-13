@@ -76,15 +76,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content: "Request vehicles, match drivers intelligently and track every trip in real time.",
       },
       { property: "og:type", content: "website" },
-      { property: "og:image", content: "/og-image.png" },
+      { property: "og:url", content: "https://vms.apptriangle.com/" },
+      { property: "og:image", content: "https://vms.apptriangle.com/og-image.png" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:image", content: "/og-image.png" },
+      { name: "twitter:image", content: "https://vms.apptriangle.com/og-image.png" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
+      { rel: "canonical", href: "https://vms.apptriangle.com/" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {

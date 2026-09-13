@@ -6352,30 +6352,41 @@
 .plan-ride__route-wrap {
   display: block;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   margin-bottom: 0.45rem;
+  box-sizing: border-box;
 }
 
 .plan-ride__route {
   width: 100%;
+  max-width: 100%;
   min-width: 0;
   border: 1.5px solid var(--pr-ink);
   border-radius: 0.85rem;
   padding: 0.3rem 0.25rem 0.35rem;
   background: var(--pr-surface);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .plan-ride__stop-row {
   display: flex;
   align-items: center;
   gap: 0.25rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .plan-ride__stop {
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;
-  width: 100%;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
   padding: 0.45rem 0.7rem;
   border: 0;
   background: transparent;
@@ -6383,6 +6394,7 @@
   cursor: text;
   text-align: left;
   border-radius: 0.55rem;
+  box-sizing: border-box;
 }
 
 .plan-ride__stop--active {
@@ -6462,6 +6474,10 @@
   font-size: 0.8125rem;
   color: var(--pr-muted);
   line-height: 1.35;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .plan-ride__placeholder {
@@ -6525,6 +6541,7 @@
   width: 1.75rem;
   height: 1.75rem;
   margin-right: 0.35rem;
+  flex-shrink: 0;
   border-radius: 9999px;
   border: 0;
   background: var(--pr-elevated);
@@ -8120,6 +8137,9 @@ a.admin-req__who-name:hover,
   background: var(--pr-surface);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .admin-req__route .plan-ride__route {
@@ -8128,6 +8148,15 @@ a.admin-req__who-name:hover,
   box-shadow: none;
   border-radius: 0;
   background: transparent;
+}
+
+.admin-req__route .route-flow {
+  padding: 0 0.9rem 0.85rem;
+}
+
+.admin-req__route .ride-detail__muted {
+  padding: 0 0.9rem 0.85rem;
+  margin: 0;
 }
 
 .admin-req__purpose-text {
@@ -8952,8 +8981,10 @@ a.admin-req__who-name:hover,
   gap: 0.2rem 0.35rem;
   min-width: 0;
   max-width: 100%;
+  width: 100%;
   padding: 0 0.85rem 0.85rem;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .route-flow__item {
@@ -8963,6 +8994,8 @@ a.admin-req__who-name:hover,
   gap: 0.2rem 0.35rem;
   min-width: 0;
   max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .route-flow__sep {
@@ -8993,8 +9026,7 @@ a.admin-req__who-name:hover,
 }
 
 .admin-req__route .route-flow {
-  padding-inline: 0;
-  padding-bottom: 0;
+  padding: 0 0.9rem 0.85rem;
 }
 
 .employee-ride__party-list {
@@ -10257,6 +10289,8 @@ a.admin-req__who-name:hover,
 .ops-card__route {
   margin-top: 0.4rem;
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .ops-card__route-line {
@@ -10269,6 +10303,7 @@ a.admin-req__who-name:hover,
   max-width: 100%;
   overflow-wrap: anywhere;
   word-break: break-word;
+  overflow: hidden;
 }
 
 .ops-card__route .route-timeline {
@@ -11023,6 +11058,41 @@ a.req-card__phone:hover {
   border-left: 1px solid color-mix(in oklch, var(--color-border) 80%, transparent);
 }
 
+.assign-panel__search {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--color-border);
+  background: color-mix(in oklch, var(--color-muted) 40%, transparent);
+}
+
+.assign-panel__search-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  color: var(--color-muted-foreground);
+  opacity: 0.85;
+}
+
+.assign-panel__search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.assign-panel__search-input::placeholder {
+  color: var(--color-muted-foreground);
+  font-weight: 500;
+}
+
 .assign-panel__list {
   list-style: none;
   margin: 0;
@@ -11038,7 +11108,7 @@ a.req-card__phone:hover {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.15rem;
+  gap: 0.12rem;
   width: 100%;
   padding: 0.65rem 0.75rem;
   text-align: left;
@@ -11064,6 +11134,15 @@ a.req-card__phone:hover {
   font-size: 0.875rem;
   font-weight: 750;
   line-height: 1.25;
+}
+
+.assign-panel__phone {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  color: var(--color-primary);
+  line-height: 1.2;
 }
 
 .assign-panel__meta {

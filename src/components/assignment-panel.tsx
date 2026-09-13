@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
+import { Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/fleet-ui";
 import { DRIVER_STATUS, VEHICLE_STATUS } from "@/lib/fleet";
+import { formatBdPhone } from "@/lib/phone";
 import {
   useAssignRequest,
   useDrivers,
@@ -64,6 +66,7 @@ export function AssignmentPanel({
   const vehicles = useVehicles();
   const drivers = useDrivers();
   const assign = useAssignRequest();
+  const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string>(() =>
     initialDriverId && initialVehicleId ? `${initialDriverId}:${initialVehicleId}` : "",
   );
@@ -97,7 +100,23 @@ export function AssignmentPanel({
     return out;
   }, [drivers.data, freeVehicles, initialDriverId, initialVehicleId]);
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const digits = q.replace(/\D/g, "");
+    return pairs.filter(({ driver, vehicle }) => {
+      const name = driver.full_name.toLowerCase();
+      const phone = (driver.phone ?? "").toLowerCase();
+      const phoneDigits = phone.replace(/\D/g, "");
+      const fleet = `${vehicle.fleet_number} ${vehicle.name}`.toLowerCase();
+      if (name.includes(q) || phone.includes(q) || fleet.includes(q)) return true;
+      if (digits.length >= 3 && phoneDigits.includes(digits)) return true;
+      return false;
+    });
+  }, [pairs, query]);
+
   const selected = pairs.find((p) => `${p.driver.id}:${p.vehicle.id}` === picked) ?? null;
+  const searchActive = query.trim().length > 0;
 
   if (disabled) {
     return <EmptyState compact title="Can't assign" description="This request is closed." />;
@@ -140,31 +159,59 @@ export function AssignmentPanel({
 
   return (
     <section className="assign-panel min-w-0 space-y-3">
-      <ul className="assign-panel__list" role="listbox" aria-label="Available drivers">
-        {pairs.map(({ driver, vehicle }) => {
-          const key = `${driver.id}:${vehicle.id}`;
-          const active = picked === key;
-          const primary =
-            !!driver.primary_vehicle_id && driver.primary_vehicle_id === vehicle.id;
-          return (
-            <li key={key}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={active}
-                className={cn("assign-panel__row", active && "assign-panel__row--active")}
-                onClick={() => setPicked(key)}
-              >
-                <span className="assign-panel__name">{driver.full_name}</span>
-                <span className="assign-panel__meta">
-                  {vehicle.fleet_number} · {vehicle.name}
-                  {primary ? " · Primary" : ""}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      <label className="assign-panel__search">
+        <Search className="assign-panel__search-icon" aria-hidden />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setPicked("");
+          }}
+          placeholder="Search name or phone…"
+          className="assign-panel__search-input"
+          autoComplete="off"
+          autoFocus
+        />
+      </label>
+
+      {!searchActive ? (
+        <p className="text-sm text-muted-foreground">
+          Type a name or phone to find a driver ({pairs.length} available).
+        </p>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No drivers match “{query.trim()}”.</p>
+      ) : (
+        <ul className="assign-panel__list" role="listbox" aria-label="Matching drivers">
+          {filtered.map(({ driver, vehicle }) => {
+            const key = `${driver.id}:${vehicle.id}`;
+            const active = picked === key;
+            const primary =
+              !!driver.primary_vehicle_id && driver.primary_vehicle_id === vehicle.id;
+            const phone = driver.phone?.trim();
+            return (
+              <li key={key}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  className={cn("assign-panel__row", active && "assign-panel__row--active")}
+                  onClick={() => setPicked(key)}
+                >
+                  <span className="assign-panel__name">{driver.full_name}</span>
+                  {phone ? (
+                    <span className="assign-panel__phone">{formatBdPhone(phone)}</span>
+                  ) : null}
+                  <span className="assign-panel__meta">
+                    {vehicle.fleet_number} · {vehicle.name}
+                    {primary ? " · Primary" : ""}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       <Button
         size="sm"
         className="min-h-10 w-full"

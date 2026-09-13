@@ -29,14 +29,6 @@ type AuthView = "signin" | "set-password";
 
 const DEMO_USERS = [
   {
-    id: "admin",
-    role: "Admin",
-    name: "Transport Admin",
-    detail: "Dispatch, fleet, approvals",
-    phone: "1711000001",
-    password: "admin123",
-  },
-  {
     id: "employee",
     role: "Employee",
     name: "Nusrat Jahan",

@@ -160,7 +160,7 @@ function DispatcherDashboard() {
 
         <Panel
           title="Pending"
-          description="Approve or assign a driver"
+          description="Assign a driver to open requests"
           tone="primary"
           compact
           bodyClassName="p-0"
