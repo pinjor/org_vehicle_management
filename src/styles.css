@@ -386,12 +386,8 @@
   order: 1;
 }
 
-.dispatch-console__cell--vehicles {
-  order: 2;
-}
-
 .dispatch-console__cell--trips {
-  order: 3;
+  order: 2;
 }
 
 .dispatch-console__cell {
@@ -419,56 +415,6 @@
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
-}
-
-.dispatch-console__fleet {
-  list-style: none;
-  margin: 0;
-  padding: 0.25rem 0 0.5rem;
-}
-
-.dispatch-console__fleet-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.65rem;
-  padding: 0.55rem 0.85rem;
-  border-bottom: 1px solid color-mix(in oklch, var(--color-border) 70%, transparent);
-  min-width: 0;
-}
-
-.dispatch-console__fleet-row:last-child {
-  border-bottom: none;
-}
-
-.dispatch-console__fleet-row--busy {
-  opacity: 0.85;
-}
-
-.dispatch-console__fleet-row--down {
-  justify-content: flex-start;
-  gap: 0.5rem;
-}
-
-.dispatch-console__fleet-link {
-  min-width: 0;
-  flex: 1;
-  color: inherit;
-  text-decoration: none;
-}
-
-.dispatch-console__fleet-link:hover {
-  color: var(--color-primary);
-}
-
-.dispatch-console__fleet-name {
-  display: block;
-  font-size: 0.8125rem;
-  font-weight: 650;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 @media (max-width: 1023px) {
@@ -525,25 +471,14 @@
   .dispatch-console__board {
     flex: 1 1 auto;
     display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1.15fr) minmax(10rem, 0.85fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     gap: 0.85rem 1rem;
     min-height: 0;
     overflow: hidden;
   }
 
-  .dispatch-console__board--queue-min {
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .dispatch-console__board--vehicles-min {
-    grid-template-rows: minmax(0, 1fr) auto;
-  }
-
-  .dispatch-console__board--queue-min.dispatch-console__board--vehicles-min {
-    grid-template-rows: auto auto;
-  }
-
+  .dispatch-console__board--queue-min .dispatch-console__cell--queue,
   .dispatch-console__board--trips-min .dispatch-console__cell--trips {
     align-self: start;
   }
@@ -556,13 +491,7 @@
 
   .dispatch-console__cell--trips {
     grid-column: 2;
-    grid-row: 1 / span 2;
-    order: unset;
-  }
-
-  .dispatch-console__cell--vehicles {
-    grid-column: 1;
-    grid-row: 2;
+    grid-row: 1;
     order: unset;
   }
 
@@ -576,15 +505,11 @@
     padding: 0.75rem;
     gap: 0.65rem;
   }
-
-  .dispatch-console__fleet-name {
-    font-size: 0.875rem;
-  }
 }
 
 @media (min-width: 1280px) {
   .dispatch-console__board {
-    grid-template-columns: minmax(0, 1.45fr) minmax(22rem, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 1rem 1.15rem;
   }
 }
@@ -5711,9 +5636,13 @@
   margin-top: 0.125rem;
   font-size: 0.9375rem;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.35;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -7511,6 +7440,22 @@
     order: -1;
   }
 
+  /* One scroll root so pull-to-refresh works on mobile */
+  .app-shell-root {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .app-shell-root > .app-shell-main {
+    min-height: 0;
+    overflow-x: clip;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+  }
+
   /* Employee + driver ride/trip detail — grow with content, shell scrolls */
   .plan-ride.ride-detail,
   .plan-ride.ride-detail--driver {
@@ -7540,6 +7485,45 @@
     overflow-y: auto;
     overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;
+    position: relative;
+  }
+
+  .pull-refresh {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.2rem;
+    flex-shrink: 0;
+    overflow: hidden;
+    pointer-events: none;
+    color: var(--color-muted-foreground);
+    transition: opacity 0.12s ease;
+  }
+
+  .pull-refresh__icon {
+    transition: transform 0.15s ease;
+  }
+
+  .pull-refresh__icon--spin {
+    animation: pull-refresh-spin 0.7s linear infinite;
+  }
+
+  .pull-refresh__label {
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .pull-refresh--armed {
+    color: var(--color-primary);
+  }
+
+  @keyframes pull-refresh-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .app-shell--plan-ride .app-main-canvas,
@@ -8924,6 +8908,64 @@ a.admin-req__who-name:hover,
   border: 1.5px solid var(--pr-border);
   background: var(--pr-surface);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.employee-ride__route-empty {
+  padding: 0 0.85rem 0.85rem;
+}
+
+.route-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.35rem;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 0.85rem 0.85rem;
+  box-sizing: border-box;
+}
+
+.route-flow__item {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.35rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.route-flow__sep {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: color-mix(in oklch, var(--color-muted-foreground) 85%, transparent);
+}
+
+.route-flow__stop {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 0.9375rem;
+  font-weight: 750;
+  line-height: 1.4;
+  color: var(--color-foreground);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.route-flow__stop--now {
+  color: var(--color-primary);
+}
+
+.route-flow__now {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.admin-req__route .route-flow {
+  padding-inline: 0;
+  padding-bottom: 0;
 }
 
 .employee-ride__party-list {
@@ -8963,6 +9005,15 @@ a.admin-req__who-name:hover,
   font-weight: 800;
   color: var(--pr-ink);
   overflow-wrap: anywhere;
+}
+
+.employee-ride__party-phone {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
 }
 
 .employee-ride__party-role,
@@ -9033,12 +9084,12 @@ a.admin-req__who-name:hover,
   vertical-align: baseline;
 }
 
-.employee-ride__assign-meta .when-stamp__time {
+.employee-ride__assign-meta .when-stamp__time,
+.employee-ride__assign-meta .when-stamp__date {
   font-size: 0.6875rem;
-  font-weight: 750;
+  font-weight: 700;
 }
 
-.employee-ride__assign-meta .when-stamp__date,
 .employee-ride__assign-meta .when-stamp__rel {
   font-size: 0.625rem;
   font-weight: 600;
@@ -9149,6 +9200,44 @@ a.admin-req__who-name:hover,
 
 .driver-trip__when {
   margin-bottom: 0.75rem;
+}
+
+.driver-trip__where {
+  margin: 0 0 0.85rem;
+  padding: 0.65rem 0.75rem 0.35rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--pr-border);
+  background: var(--pr-surface);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.driver-trip__where .route-flow {
+  padding: 0 0 0.4rem;
+}
+
+.route-line {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: color-mix(in oklch, var(--color-foreground) 88%, transparent);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.route-line--detail {
+  font-size: 1rem;
+  font-weight: 750;
+  color: var(--color-foreground);
+}
+
+.route-line__now {
+  font-weight: 650;
+  color: var(--color-primary);
 }
 
 .driver-trip__next {
@@ -9345,6 +9434,15 @@ a.admin-req__who-name:hover,
   font-size: 1rem !important;
 }
 
+.driver-trip__cta--end {
+  background: var(--color-destructive, #dc2626) !important;
+  color: var(--color-destructive-foreground, #fff) !important;
+}
+
+.driver-trip__cta--end:hover {
+  filter: brightness(1.05);
+}
+
 .driver-trip__secondary {
   display: flex;
   flex-direction: column;
@@ -9506,35 +9604,41 @@ a.admin-req__who-name:hover,
 }
 
 .when-rail__time {
-  font-size: 0.9375rem;
+  font-size: 0.8125rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
-  line-height: 1.1;
+  line-height: 1.15;
   color: var(--color-foreground);
   white-space: nowrap;
 }
 
 .when-rail--sm .when-rail__time {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
 }
 
 .when-rail--lg .when-rail__time {
-  font-size: 1.25rem;
+  font-size: 0.9375rem;
 }
 
 .when-rail__date {
-  margin-top: 0.2rem;
-  font-size: 0.625rem;
+  margin-top: 0;
+  margin-bottom: 0.15rem;
+  font-size: 0.8125rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  line-height: 1.2;
-  color: color-mix(in oklch, var(--color-foreground) 72%, transparent);
+  letter-spacing: 0.01em;
+  text-transform: none;
+  line-height: 1.15;
+  color: var(--color-foreground);
+  white-space: nowrap;
 }
 
 .when-rail--sm .when-rail__date {
-  font-size: 0.5625rem;
+  font-size: 0.75rem;
+}
+
+.when-rail--lg .when-rail__date {
+  font-size: 0.9375rem;
 }
 
 .when-rail__rel {
@@ -9566,18 +9670,19 @@ a.admin-req__who-name:hover,
 }
 
 .when-banner__time {
-  font-size: 1.15rem;
+  font-size: 0.9375rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   color: var(--color-foreground);
-  line-height: 1;
+  line-height: 1.15;
 }
 
 .when-banner__date {
-  font-size: 0.8125rem;
+  font-size: 0.9375rem;
   font-weight: 700;
-  color: color-mix(in oklch, var(--color-foreground) 75%, transparent);
+  line-height: 1.15;
+  color: var(--color-foreground);
 }
 
 .when-banner__rel {
@@ -9607,9 +9712,9 @@ a.admin-req__who-name:hover,
 }
 
 .when-stamp__date {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: color-mix(in oklch, var(--color-foreground) 70%, transparent);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-foreground);
 }
 
 .when-stamp__rel {
@@ -9723,11 +9828,16 @@ a.admin-req__who-name:hover,
   margin: 0;
   font-size: 0.875rem;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.35;
   color: var(--color-foreground);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .trip-list-row__sub {
@@ -9748,12 +9858,14 @@ a.admin-req__who-name:hover,
 }
 
 @media (min-width: 1024px) {
-  .when-rail__time {
-    font-size: 1rem;
+  .when-rail__time,
+  .when-rail__date {
+    font-size: 0.875rem;
   }
 
-  .when-rail--lg .when-rail__time {
-    font-size: 1.35rem;
+  .when-rail--lg .when-rail__time,
+  .when-rail--lg .when-rail__date {
+    font-size: 1rem;
   }
 
   .trip-list-row {
@@ -9842,10 +9954,14 @@ a.admin-req__who-name:hover,
   margin: 0.15rem 0 0;
   font-size: 0.9375rem;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.35;
   color: var(--color-foreground);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -9909,14 +10025,9 @@ a.admin-req__who-name:hover,
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
   color: var(--color-primary);
-  text-decoration: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-a.ops-card__person-phone:hover {
-  text-decoration: underline;
 }
 
 .ops-card__person-miss {
@@ -9951,6 +10062,18 @@ a.ops-card__person-phone:hover {
 .ops-card__route {
   margin-top: 0.4rem;
   min-width: 0;
+}
+
+.ops-card__route-line {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1.4;
+  color: color-mix(in oklch, var(--color-foreground) 82%, transparent);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .ops-card__route .route-timeline {
@@ -10085,11 +10208,29 @@ a.ops-card__person-phone:hover {
   transition: filter 0.12s ease;
 }
 
+.ops-card__accept--end {
+  background: var(--color-destructive, #dc2626);
+  color: var(--color-destructive-foreground, #fff);
+}
+
+.ops-card__accept--start {
+  background: color-mix(in oklch, var(--color-primary) 88%, #0a7a3e);
+}
+
 .ops-card__foot--split .ops-card__accept {
   border-left: 1px solid var(--color-border);
   min-height: 100%;
   background: var(--color-primary);
   color: var(--color-primary-foreground);
+}
+
+.ops-card__foot--split .ops-card__accept--end {
+  background: var(--color-destructive, #dc2626);
+  color: var(--color-destructive-foreground, #fff);
+}
+
+.ops-card__foot--split .ops-card__accept--start {
+  background: color-mix(in oklch, var(--color-primary) 88%, #0a7a3e);
 }
 
 .ops-card__foot--split .ops-card__call {
@@ -10159,12 +10300,9 @@ a.ops-card__person-phone:hover {
     width: 3.25rem;
   }
 
-  .ops-card__when .when-rail__time {
-    font-size: 0.75rem;
-  }
-
+  .ops-card__when .when-rail__time,
   .ops-card__when .when-rail__date {
-    font-size: 0.5625rem;
+    font-size: 0.6875rem;
   }
 
   .ops-card__when .when-rail__rel {
@@ -10178,7 +10316,12 @@ a.ops-card__person-phone:hover {
   .ops-card__title {
     margin-top: 0;
     font-size: 0.8125rem;
-    -webkit-line-clamp: 1;
+    -webkit-line-clamp: 3;
+  }
+
+  .ride-home__active-title {
+    font-size: 0.875rem;
+    -webkit-line-clamp: 3;
   }
 
   .ops-card__badges {
@@ -10218,8 +10361,8 @@ a.ops-card__person-phone:hover {
     margin-top: 0.3rem;
   }
 
-  .ops-card__route .route-timeline__name {
-    font-size: 0.75rem;
+  .ops-card__route-line {
+    font-size: 0.6875rem;
   }
 
   .ops-card__ref,

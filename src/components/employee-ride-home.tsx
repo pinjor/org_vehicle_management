@@ -4,7 +4,6 @@ import {
   Building2,
   ChevronRight,
   Clock,
-  Phone,
   Plane,
   Search,
 } from "lucide-react";
@@ -15,8 +14,9 @@ import { LookupChip } from "@/components/lookup-chip";
 import { Button } from "@/components/ui/button";
 import { MetaChip } from "@/components/fleet-ui";
 import { useAuth } from "@/lib/auth";
+import { passengerLabel } from "@/lib/fleet";
 import { formatBdPhone } from "@/lib/phone";
-import { routeLine } from "@/lib/route-summary";
+import { routeLineCompact } from "@/lib/route-summary";
 import { useLocations, useRequests } from "@/lib/queries";
 
 type SavedLocation = {
@@ -100,10 +100,10 @@ export function EmployeeRideHome() {
             <WhenRail at={banner.pickup_at} size="sm" />
             <div className="ride-home__active-body min-w-0 flex-1">
               <p className="ride-home__active-label">
-                {isLive ? "Active ride" : "Awaiting dispatch"}
+                {isLive ? "Active" : "Pending"}
               </p>
               <p className="ride-home__active-title">
-                {routeLine(banner.request_route_points) ?? banner.purpose ?? "Your trip"}
+                {routeLineCompact(banner.request_route_points) ?? banner.purpose ?? "Your trip"}
               </p>
               {isLive && banner.drivers?.full_name ? (
                 <div className="ride-home__driver">
@@ -127,7 +127,7 @@ export function EmployeeRideHome() {
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <LookupChip group="request_status" value={banner.status} />
                   {!isLive ? (
-                    <MetaChip label={`${banner.passenger_count} pax`} tone="neutral" />
+                    <MetaChip label={passengerLabel(banner.passenger_count)} tone="neutral" />
                   ) : null}
                 </div>
               )}
@@ -137,15 +137,6 @@ export function EmployeeRideHome() {
               <ChevronRight className="size-4" />
             </span>
           </Link>
-          {isLive && driverPhone ? (
-            <a href={`tel:${driverPhone}`} className="ride-home__call-bar">
-              <Phone className="size-4 shrink-0" />
-              <span className="ride-home__call-bar-text">
-                Call {banner.drivers?.full_name?.split(" ")[0] ?? "driver"}
-              </span>
-              <span className="ride-home__call-bar-num">{formatBdPhone(driverPhone)}</span>
-            </a>
-          ) : null}
         </div>
       ) : null}
 

@@ -131,7 +131,10 @@ export function clearSessionCookie(c: Context) {
 }
 
 export async function getUserFromRequest(c: Context): Promise<SessionUser | null> {
-  const token = getCookie(c, COOKIE);
+  const header = c.req.header("authorization");
+  const bearer =
+    header?.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : null;
+  const token = bearer || getCookie(c, COOKIE);
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);

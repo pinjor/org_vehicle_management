@@ -31,6 +31,7 @@ import {
 } from "@/lib/fleet";
 import { useDriver, useDriverTrips, useUpdateDriver, useVehicles } from "@/lib/queries";
 import { formatBdPhone, isValidBdPhone, maskBdPhoneInput, normalizeBdPhone } from "@/lib/phone";
+import { routeLineCompact } from "@/lib/route-summary";
 
 export const Route = createFileRoute("/drivers/$driverId")({
   head: ({ params }) => ({
@@ -465,12 +466,19 @@ function DriverProfilePage() {
                   <ListRow key={t.id}>
                     <TripListRow
                       when={t.vehicle_requests?.pickup_at ?? t.created_at}
-                      title={t.vehicle_requests?.requester_name?.trim() || t.vehicle_requests?.purpose || t.reference}
+                      title={
+                        routeLineCompact(t.vehicle_requests?.request_route_points) ||
+                        t.vehicle_requests?.requester_name?.trim() ||
+                        t.vehicle_requests?.purpose ||
+                        t.reference
+                      }
                       subtitle={[
-                        t.vehicles?.registration_number ?? t.vehicles?.name,
-                        t.vehicle_requests?.purpose && t.vehicle_requests?.requester_name
-                          ? t.vehicle_requests.purpose
+                        t.vehicle_requests?.requester_name?.trim() &&
+                        routeLineCompact(t.vehicle_requests?.request_route_points)
+                          ? t.vehicle_requests.requester_name.trim()
                           : null,
+                        t.vehicles?.registration_number ?? t.vehicles?.name,
+                        t.vehicle_requests?.purpose,
                         t.reference,
                       ]
                         .filter(Boolean)

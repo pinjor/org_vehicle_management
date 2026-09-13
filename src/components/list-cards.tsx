@@ -4,12 +4,12 @@ import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { LookupChip } from "@/components/lookup-chip";
 import { StatusChip } from "@/components/fleet-ui";
-import { RouteTimeline, WhenRail } from "@/components/info-blocks";
-import { TRIP_STATUS } from "@/lib/fleet";
+import { WhenRail } from "@/components/info-blocks";
+import { passengerLabel, TRIP_STATUS, simplifiedDriverCta } from "@/lib/fleet";
 import { useI18n } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { formatBdPhone } from "@/lib/phone";
-import { primaryContact, routeEndpoints, routeLine, type RoutePointLike } from "@/lib/route-summary";
+import { primaryContact, routeEndpoints, routeLineCompact, type RoutePointLike } from "@/lib/route-summary";
 import { useAdvanceTrip, type RequestRow, type TripRecord } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 type Person = {
   role: string;
   name: string;
-  /** For CallBars only. Omit = no call row. null = show "No phone" under name. */
+  /** Omit = no phone UI. string = show number (+ call bar when open). null = "No phone". */
   phone?: string | null;
 };
 
@@ -78,48 +78,69 @@ function OpsBody({
   meta,
   route,
   reference,
+  routeBeforePeople = false,
 }: {
   when?: string | null;
-  label: string;
+  label?: string;
   title: string;
   badges?: ReactNode;
   people: Person[];
   meta?: ReactNode;
   route?: ReactNode;
   reference?: string;
+  /** Driver cards: show A → B before passenger. */
+  routeBeforePeople?: boolean;
 }) {
+  const peopleBlock =
+    people.length > 0 ? (
+      <div
+        className={cn(
+          "ops-card__people",
+          people.length === 1 && "ops-card__people--solo",
+        )}
+      >
+        {people.map((p) => (
+          <div key={`${p.role}-${p.name}`} className="ops-card__person">
+            <p className="ops-card__person-role">{p.role}</p>
+            <p className="ops-card__person-name">{p.name}</p>
+            {"phone" in p ? (
+              p.phone ? (
+                <p className="ops-card__person-phone">{formatBdPhone(p.phone)}</p>
+              ) : (
+                <p className="ops-card__person-miss">No phone</p>
+              )
+            ) : null}
+          </div>
+        ))}
+      </div>
+    ) : null;
+  const routeBlock = route ? <div className="ops-card__route">{route}</div> : null;
+
   return (
     <>
       <WhenRail at={when ?? null} size="sm" className="ops-card__when" />
       <div className="ops-card__body min-w-0 flex-1">
         <div className="ops-card__head">
           <div className="min-w-0 flex-1">
-            <p className="ops-card__label">{label}</p>
+            {label ? <p className="ops-card__label">{label}</p> : null}
             <p className="ops-card__title">{title}</p>
           </div>
           {badges ? <div className="ops-card__badges">{badges}</div> : null}
         </div>
 
-        <div
-          className={cn(
-            "ops-card__people",
-            people.length === 1 && "ops-card__people--solo",
-          )}
-        >
-          {people.map((p) => (
-            <div key={`${p.role}-${p.name}`} className="ops-card__person">
-              <p className="ops-card__person-role">{p.role}</p>
-              <p className="ops-card__person-name">{p.name}</p>
-              {/* Phone lives in CallBars only — here only surface missing contact */}
-              {"phone" in p && !p.phone ? (
-                <p className="ops-card__person-miss">No phone</p>
-              ) : null}
-            </div>
-          ))}
-        </div>
+        {routeBeforePeople ? (
+          <>
+            {routeBlock}
+            {peopleBlock}
+          </>
+        ) : (
+          <>
+            {peopleBlock}
+            {routeBlock}
+          </>
+        )}
 
         {meta ? <div className="ops-card__meta">{meta}</div> : null}
-        {route ? <div className="ops-card__route">{route}</div> : null}
         {reference ? <p className="ops-card__ref">{reference}</p> : null}
       </div>
     </>
@@ -205,6 +226,7 @@ function driverTripLabel(status: string, emphasize?: boolean): string {
   }
 }
 
+/** Card route: A → B → C (multi-stop included). */
 function RouteOnce({
   points,
   pickup,
@@ -214,16 +236,13 @@ function RouteOnce({
   pickup?: { name: string } | null;
   drop?: { name: string } | null;
 }) {
-  if (points && points.length > 0) {
-    return <RouteTimeline points={points} />;
-  }
-  if (!pickup && !drop) return null;
-  return (
-    <RouteTimeline
-      {...(pickup ? { pickup } : {})}
-      {...(drop ? { drop } : {})}
-    />
-  );
+  const line =
+    routeLineCompact(points) ??
+    (pickup?.name && drop?.name
+      ? `${pickup.name} → ${drop.name}`
+      : pickup?.name?.trim() || drop?.name?.trim() || null);
+  if (!line) return null;
+  return <p className="ops-card__route-line route-line">{line}</p>;
 }
 
 /** Driver — where + who first (concrete), not abstract purpose-only. */
@@ -236,11 +255,10 @@ export function DriverAssignmentCard({
   emphasize?: boolean;
   showStatus?: boolean;
 }) {
-  const { t, isDriverPortal } = useI18n();
+  const { t, isDriverPortal, locale } = useI18n();
   const advance = useAdvanceTrip();
   const request = trip.vehicle_requests;
   const routePoints = request?.request_route_points;
-  const { pickup, drop } = routeEndpoints(routePoints);
   const contact = primaryContact({
     ...(request?.requester_name ? { requester_name: request.requester_name } : {}),
     ...(request?.requester_phone ? { requester_phone: request.requester_phone } : {}),
@@ -253,20 +271,9 @@ export function DriverAssignmentCard({
   const statusLabel = isDriverPortal
     ? t(statusKey)
     : (TRIP_STATUS[trip.status]?.label ?? trip.status);
-  const plate = trip.vehicles?.registration_number ?? trip.vehicles?.name;
-  const where = routeLine(routePoints);
-  const purpose = request?.purpose?.trim() || null;
-  const isMulti = (routePoints?.length ?? 0) > 2;
-  // Multi-stop: purpose as title, full stop list in route. One-way: route in title.
-  const title =
-    (isMulti ? purpose : null) ||
-    where ||
-    (drop?.name
-      ? `${pickup?.name ? `${pickup.name} → ` : ""}${drop.name}`
-      : null) ||
-    purpose ||
-    trip.reference;
-  const showRouteTimeline = isMulti || (!where && !!(pickup || drop));
+  const where = routeLineCompact(routePoints);
+  // Route once as title (A → B → C). No purpose, no second route block.
+  const title = where || trip.reference;
   const passengerName = contact?.name?.trim() || "Passenger";
   const people: Person[] = [
     {
@@ -275,10 +282,28 @@ export function DriverAssignmentCard({
       phone: contact?.phone?.trim() || null,
     },
   ];
-  const canAccept = trip.status === "driver_assigned";
+  const cta = simplifiedDriverCta(trip.status);
   const live = !["completed", "cancelled", "breakdown"].includes(trip.status);
   const hasPhone = people.some((p) => !!p.phone?.trim());
   const showCall = live && hasPhone;
+  const showFoot = !!cta || showCall;
+
+  const ctaLabel =
+    cta?.kind === "accept"
+      ? t("driver.action.accept")
+      : cta?.kind === "start"
+        ? t("driver.action.startRide")
+        : cta?.kind === "end"
+          ? t("driver.action.endRide")
+          : "";
+  const ctaHint =
+    cta?.kind === "accept"
+      ? t("driver.action.acceptHint")
+      : cta?.kind === "start"
+        ? t("driver.action.startRideHint")
+        : cta?.kind === "end"
+          ? t("driver.action.endRideHint")
+          : "";
 
   return (
     <OpsCardShell
@@ -286,33 +311,37 @@ export function DriverAssignmentCard({
       params={{ tripId: trip.id }}
       emphasize={!!emphasize}
       footer={
-        canAccept || showCall ? (
+        showFoot ? (
           <div
             className={cn(
               "ops-card__foot",
-              canAccept && showCall && "ops-card__foot--split",
+              cta && showCall && "ops-card__foot--split",
             )}
           >
             {showCall ? <CallBars people={people} /> : null}
-            {canAccept ? (
+            {cta ? (
               <button
                 type="button"
-                className="ops-card__accept"
+                className={cn(
+                  "ops-card__accept",
+                  cta.kind === "end" && "ops-card__accept--end",
+                  cta.kind === "start" && "ops-card__accept--start",
+                )}
                 disabled={advance.isPending}
-                aria-label={t("driver.action.confirmHint")}
+                aria-label={ctaHint}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   advance.mutate(
-                    { tripId: trip.id, action: "confirm" },
+                    { tripId: trip.id, action: cta.action },
                     {
-                      onSuccess: () => toast.success(t("driver.action.confirm")),
+                      onSuccess: () => toast.success(ctaLabel),
                       onError: (err) => toast.error(err.message),
                     },
                   );
                 }}
               >
-                {advance.isPending ? "…" : t("driver.action.confirm")}
+                {advance.isPending ? "…" : ctaLabel}
               </button>
             ) : null}
           </div>
@@ -337,21 +366,20 @@ export function DriverAssignmentCard({
           <MetaBits
             items={[
               request?.passenger_count != null
-                ? t("driver.preview.pax", { count: request.passenger_count })
+                ? locale === "bn"
+                  ? t("driver.preview.pax", { count: request.passenger_count })
+                  : passengerLabel(request.passenger_count)
                 : null,
-              plate,
-              purpose && purpose !== title ? purpose : null,
             ]}
           />
         }
-        route={showRouteTimeline ? <RouteOnce points={routePoints} /> : null}
         reference={trip.reference}
       />
     </OpsCardShell>
   );
 }
 
-/** Employee — driver when assigned; route once; phone only in call bar. */
+/** Employee — driver when assigned; route once. Phone as text, no call. */
 export function EmployeeRequestCard({
   request,
 }: {
@@ -363,35 +391,26 @@ export function EmployeeRequestCard({
   const plate = request.vehicles?.registration_number ?? request.vehicles?.name;
   const assigned = !!(driverName || plate);
   const title = purposeTitle(request.purpose, "Your trip");
-  const closed = ["completed", "cancelled", "rejected"].includes(request.status);
   const people: Person[] =
     assigned && driverName
       ? [
           {
             role: "Driver",
             name: driverName,
-            phone: closed ? undefined : driverPhone,
+            // Always surface number when known (incl. completed). Omit key if missing — no "No phone".
+            ...(driverPhone ? { phone: driverPhone } : {}),
           },
         ]
       : [];
 
   return (
-    <OpsCardShell
-      to="/requests/$requestId"
-      params={{ requestId: request.id }}
-      footer={!closed ? <CallBars people={people} /> : undefined}
-    >
+    <OpsCardShell to="/requests/$requestId" params={{ requestId: request.id }}>
       <OpsBody
         when={request.pickup_at}
-        label={assigned ? "Your ride" : "Waiting"}
         title={title}
         badges={<LookupChip group="request_status" value={request.status} />}
-        people={
-          people.length > 0
-            ? people
-            : [{ role: "Status", name: "Waiting for a car" }]
-        }
-        meta={<MetaBits items={[`${request.passenger_count} pax`, plate]} />}
+        people={people}
+        meta={<MetaBits items={[passengerLabel(request.passenger_count), plate]} />}
         route={<RouteOnce points={request.request_route_points} pickup={pickup} drop={drop} />}
         reference={request.reference}
       />
@@ -399,7 +418,7 @@ export function EmployeeRequestCard({
   );
 }
 
-/** Admin request — parties once; route once; phone only in call bar. */
+/** Admin request — parties once; route once. No call bar. */
 export function AdminRequestCard({
   request,
   trailing,
@@ -417,20 +436,19 @@ export function AdminRequestCard({
   const plate = request.vehicles?.registration_number ?? request.vehicles?.name;
   const assigned = !!(driverName || plate);
   const title = purposeTitle(request.purpose, request.reference);
-  const closed = ["completed", "cancelled", "rejected"].includes(request.status);
 
   const people: Person[] = [
     {
       role: "Employee",
       name: employeeName,
-      ...(closed ? {} : { phone: employeePhone }),
+      ...(employeePhone ? { phone: employeePhone } : {}),
     },
     ...(assigned
       ? [
           {
             role: "Driver",
             name: driverName ?? "Unassigned",
-            ...(closed ? {} : { phone: driverPhone }),
+            ...(driverPhone ? { phone: driverPhone } : {}),
           },
         ]
       : []),
@@ -439,7 +457,7 @@ export function AdminRequestCard({
   const label = assigned
     ? "Assigned"
     : request.status === "approved"
-      ? "To assign"
+      ? "Assign"
       : "Pending";
 
   return (
@@ -448,7 +466,6 @@ export function AdminRequestCard({
       params={{ requestId: request.id }}
       {...(trailing != null ? { trailing } : {})}
       {...(className ? { className } : {})}
-      footer={!closed ? <CallBars people={people} /> : undefined}
     >
       <OpsBody
         when={request.pickup_at}
@@ -456,7 +473,7 @@ export function AdminRequestCard({
         title={title}
         badges={<LookupChip group="request_status" value={request.status} />}
         people={people}
-        meta={<MetaBits items={[`${request.passenger_count} pax`, plate]} />}
+        meta={<MetaBits items={[passengerLabel(request.passenger_count), plate]} />}
         route={<RouteOnce points={request.request_route_points} pickup={pickup} drop={drop} />}
         reference={request.reference}
       />
@@ -464,7 +481,7 @@ export function AdminRequestCard({
   );
 }
 
-/** Admin trip — parties once; route once; call only when live. */
+/** Admin trip — parties once; route once. No call bar. */
 export function LiveTripCard({ trip }: { trip: TripRecord }) {
   const routePoints = trip.vehicle_requests?.request_route_points;
   const { pickup, drop } = routeEndpoints(routePoints);
@@ -489,34 +506,28 @@ export function LiveTripCard({ trip }: { trip: TripRecord }) {
     "Employee";
   const employeePhone =
     contact?.phone?.trim() || trip.vehicle_requests?.requester_phone?.trim() || null;
-  const pax = trip.vehicle_requests?.passenger_count;
+  const passengerCount = trip.vehicle_requests?.passenger_count;
   const purpose = trip.vehicle_requests?.purpose;
   const title = purposeTitle(purpose, trip.reference);
   const live = !["completed", "cancelled", "breakdown"].includes(trip.status);
 
-  const people: Person[] = live
-    ? [
-        {
-          role: "Employee",
-          name: employeeName,
-          phone: employeePhone,
-        },
-        {
-          role: "Driver",
-          name: driverName ?? "Unassigned",
-          phone: driverPhone,
-        },
-      ]
-    : [
-        { role: "Employee", name: employeeName },
-        { role: "Driver", name: driverName ?? "Unassigned" },
-      ];
+  const people: Person[] = [
+    {
+      role: "Employee",
+      name: employeeName,
+      ...(employeePhone ? { phone: employeePhone } : {}),
+    },
+    {
+      role: "Driver",
+      name: driverName ?? "Unassigned",
+      ...(driverPhone ? { phone: driverPhone } : {}),
+    },
+  ];
 
   return (
     <OpsCardShell
       to={trip.request_id ? "/requests/$requestId" : undefined}
       params={trip.request_id ? { requestId: trip.request_id } : undefined}
-      footer={live ? <CallBars people={people} /> : undefined}
     >
       <OpsBody
         when={pickupAt ?? null}
@@ -524,7 +535,7 @@ export function LiveTripCard({ trip }: { trip: TripRecord }) {
         title={title}
         badges={<LookupChip group="trip_status" value={trip.status} />}
         people={people}
-        meta={<MetaBits items={[pax != null ? `${pax} pax` : null, vehicle]} />}
+        meta={<MetaBits items={[passengerCount != null ? passengerLabel(passengerCount) : null, vehicle]} />}
         route={<RouteOnce points={routePoints} pickup={pickup} drop={drop} />}
         reference={trip.reference}
       />

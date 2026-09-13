@@ -1,11 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Car, Clock, Radar, Users, Wrench } from "lucide-react";
+import { Car, Clock, Radar, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { AdminRequestCard, LiveTripCard } from "@/components/list-cards";
-import { LookupChip, LookupMetaChip } from "@/components/lookup-chip";
-import { ChipGroup, EmptyState, KpiCard, MetaChip, Panel } from "@/components/fleet-ui";
+import { EmptyState, KpiCard, Panel } from "@/components/fleet-ui";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { sortDispatchQueue, sortTripsList } from "@/lib/fleet";
@@ -14,12 +13,11 @@ import { cn } from "@/lib/utils";
 
 const DISPATCH_UI_KEY = "fleetops.dispatch.ui";
 
-type DispatchSectionId = "queue" | "vehicles" | "trips";
+type DispatchSectionId = "queue" | "trips";
 type DispatchSections = Record<DispatchSectionId, boolean>;
 
 const DEFAULT_COLLAPSED: DispatchSections = {
   queue: false,
-  vehicles: false,
   trips: false,
 };
 
@@ -73,10 +71,6 @@ function DispatchPage() {
 
   const fleet = vehicles.data ?? [];
   const availableVehicles = fleet.filter((v) => v.operational_status === "available");
-  const busyVehicles = fleet.filter((v) => ["reserved", "on_trip"].includes(v.operational_status));
-  const downVehicles = fleet.filter((v) =>
-    ["under_maintenance", "unavailable", "out_of_service"].includes(v.operational_status),
-  );
   const availableDrivers = (drivers.data ?? []).filter((d) => d.current_status === "available");
   const liveTrips = sortTripsList(trips.data ?? []);
 
@@ -122,48 +116,6 @@ function DispatchPage() {
       </ul>
     );
 
-  const vehiclesBody = (
-    <ul className="dispatch-console__fleet">
-      {availableVehicles.map((v) => (
-        <li key={v.id} className="dispatch-console__fleet-row">
-          <Link
-            to="/fleet/$vehicleId"
-            params={{ vehicleId: v.id }}
-            className="dispatch-console__fleet-link"
-          >
-            <span className="dispatch-console__fleet-name">
-              {v.fleet_number} · {v.name}
-            </span>
-            <ChipGroup className="mt-1">
-              <LookupMetaChip group="vehicle_category" value={v.category} />
-              <MetaChip label={`${v.seat_capacity} seats`} tone="neutral" />
-            </ChipGroup>
-          </Link>
-          <LookupChip group="vehicle_status" value="available" />
-        </li>
-      ))}
-      {busyVehicles.map((v) => (
-        <li key={v.id} className="dispatch-console__fleet-row dispatch-console__fleet-row--busy">
-          <span className="dispatch-console__fleet-name truncate">
-            {v.fleet_number} · {v.name}
-          </span>
-          <LookupChip group="vehicle_status" value={v.operational_status} />
-        </li>
-      ))}
-      {downVehicles.length > 0 ? (
-        <li className="dispatch-console__fleet-row dispatch-console__fleet-row--down">
-          <Wrench className="size-3.5 shrink-0 text-warning" aria-hidden />
-          <MetaChip label={`+${downVehicles.length} unavailable / maintenance`} tone="warning" />
-        </li>
-      ) : null}
-      {availableVehicles.length === 0 && busyVehicles.length === 0 && downVehicles.length === 0 ? (
-        <li className="p-3">
-          <EmptyState flush compact title="No vehicles" description="Fleet list is empty." />
-        </li>
-      ) : null}
-    </ul>
-  );
-
   const tripsBody =
     liveTrips.length === 0 ? (
       <EmptyState flush title="No live trips" description="Active trips show here." />
@@ -181,7 +133,7 @@ function DispatchPage() {
     <AppShell title="Dispatch" subtitle="Assign rides" fillViewport>
       <div className="dispatch-console">
         <div className="dispatch-console__kpis">
-          <KpiCard label="Pending" value={queue.length} hint="To assign" tone="warning" icon={<Clock />} />
+          <KpiCard label="Pending" value={queue.length} hint="Need assign" tone="warning" icon={<Clock />} />
           <KpiCard
             label="Vehicles free"
             value={availableVehicles.length}
@@ -203,7 +155,6 @@ function DispatchPage() {
           className={cn(
             "dispatch-console__board",
             collapsed.queue && "dispatch-console__board--queue-min",
-            collapsed.vehicles && "dispatch-console__board--vehicles-min",
             collapsed.trips && "dispatch-console__board--trips-min",
           )}
         >
@@ -251,27 +202,6 @@ function DispatchPage() {
               }
             >
               {tripsBody}
-            </Panel>
-          </div>
-
-          <div className="dispatch-console__cell dispatch-console__cell--vehicles">
-            <Panel
-              title="Vehicles"
-              description={
-                collapsed.vehicles
-                  ? `${availableVehicles.length} available · tap to open`
-                  : `${availableVehicles.length} free · ${busyVehicles.length} busy`
-              }
-              tone="success"
-              collapsible
-              collapsed={collapsed.vehicles}
-              onCollapsedChange={(v) => setCollapsed("vehicles", v)}
-              compact
-              scrollBody
-              className="dispatch-console__panel"
-              bodyClassName="dispatch-console__panel-body"
-            >
-              {vehiclesBody}
             </Panel>
           </div>
         </div>

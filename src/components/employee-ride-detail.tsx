@@ -1,17 +1,15 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Car, Phone, User } from "lucide-react";
+import { ArrowLeft, Car, User } from "lucide-react";
 import { toast } from "sonner";
 import { LiveTripMap } from "@/components/live-trip-map";
-import { WhenBanner, WhenStamp } from "@/components/info-blocks";
+import { WhenBanner, WhenStamp, RouteFlow } from "@/components/info-blocks";
 import { LookupChip } from "@/components/lookup-chip";
-import { OsmRouteMap } from "@/components/osm-route-map";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { useLookupEntry } from "@/lib/lookups-context";
 import { formatBdPhone } from "@/lib/phone";
 import type { LatLng } from "@/lib/osm";
 import {
-  pointTone,
   trackFocusIndex,
   type RoutePoint,
   type TripLike,
@@ -22,7 +20,6 @@ import {
   useTripHistory,
   useTripLocation,
 } from "@/lib/queries";
-import { cn } from "@/lib/utils";
 
 export function EmployeeRideDetail({ requestId }: { requestId: string }) {
   const { data, isLoading } = useRequest(requestId);
@@ -93,10 +90,6 @@ export function EmployeeRideDetail({ requestId }: { requestId: string }) {
   const ended = ["completed", "cancelled"].includes(request.status);
   const canCancel = !!user && !ended;
   const driverPhone = request.drivers?.phone?.trim() || null;
-  const showCall =
-    !!driverPhone &&
-    !ended &&
-    !["completed", "cancelled", "breakdown"].includes(trip?.status ?? "");
   const waiting = ["submitted", "approved"].includes(request.status) && !isAssigned;
   const vehicleLabel = request.vehicles?.name ?? "—";
   const plate = request.vehicles?.registration_number;
@@ -147,8 +140,10 @@ export function EmployeeRideDetail({ requestId }: { requestId: string }) {
                     </span>
                     <span className="min-w-0">
                       <span className="employee-ride__party-name">{driverName}</span>
-                      {!driverPhone ? (
-                        <span className="employee-ride__party-miss">No phone</span>
+                      {driverPhone ? (
+                        <span className="employee-ride__party-phone">
+                          {formatBdPhone(driverPhone)}
+                        </span>
                       ) : (
                         <span className="employee-ride__party-role">Driver</span>
                       )}
@@ -166,59 +161,26 @@ export function EmployeeRideDetail({ requestId }: { requestId: string }) {
                     </span>
                   </li>
                 </ul>
-                {showCall ? (
-                  <div className="employee-ride__calls">
-                    <a href={`tel:${driverPhone}`} className="employee-ride__call">
-                      <Phone className="size-4 shrink-0" />
-                      <span className="employee-ride__call-text">
-                        Call {driverName.split(" ")[0] || "driver"}
-                      </span>
-                      <span className="employee-ride__call-num">{formatBdPhone(driverPhone)}</span>
-                    </a>
-                  </div>
-                ) : null}
               </>
             ) : (
               <p className="employee-ride__waiting">
                 {waiting
-                  ? "Waiting for a car. We'll update you soon."
-                  : "Waiting for a car."}
+                  ? "Waiting — we'll update you soon."
+                  : "Waiting."}
               </p>
             )}
           </section>
 
           <section className="employee-ride__route" aria-label="Route">
             <p className="employee-ride__section-label">Route</p>
-            <div className="plan-ride__route">
-              {mapPoints.length === 0 ? (
-                <p className="ride-detail__muted p-3">No route points.</p>
-              ) : (
-                mapPoints.map((p, i) => (
-                  <div
-                    key={`${p.point_type}-${i}`}
-                    className={cn(
-                      "plan-ride__stop",
-                      tripLive && i === focusIdx && "plan-ride__stop--focus",
-                    )}
-                  >
-                    <span
-                      className={cn("plan-ride__dot", `plan-ride__dot--${pointTone(p.point_type)}`)}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="plan-ride__stop-name">
-                        {p.name}
-                        {tripLive && i === focusIdx ? (
-                          <span className="plan-ride__stop-now"> · now</span>
-                        ) : null}
-                      </span>
-                      {p.address ? (
-                        <span className="plan-ride__stop-addr">{p.address}</span>
-                      ) : null}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
+            {mapPoints.length === 0 ? (
+              <p className="ride-detail__muted employee-ride__route-empty">No route points.</p>
+            ) : (
+              <RouteFlow
+                points={mapPoints}
+                {...(tripLive ? { focusIndex: focusIdx } : {})}
+              />
+            )}
           </section>
 
           {metaBits.length > 0 ? (
@@ -275,31 +237,19 @@ export function EmployeeRideDetail({ requestId }: { requestId: string }) {
           ) : null}
         </div>
 
-        {mapPoints.length > 0 ? (
-          <aside className="ride-detail__desk-aside employee-ride__aside" aria-label="Route map">
+        {tripLive && mapPoints.length > 0 ? (
+          <aside className="ride-detail__desk-aside employee-ride__aside" aria-label="Live map">
             <section className="ride-detail__map employee-ride__map">
-              <p className="employee-ride__map-label">
-                {tripLive ? "Live map" : "Route map"}
-              </p>
-              {tripLive ? (
-                <LiveTripMap
-                  mapOnly
-                  className="ride-detail__map-el employee-ride__map-el"
-                  points={mapPoints}
-                  focusIndex={focusIdx}
-                  externalPosition={externalPos}
-                  trail={trail}
-                  markerLabel={request.drivers?.full_name ?? "Driver"}
-                />
-              ) : (
-                <OsmRouteMap
-                  framed={false}
-                  showSummary={false}
-                  className="ride-detail__map-el employee-ride__map-el"
-                  points={mapPoints}
-                  focusIndex={focusIdx}
-                />
-              )}
+              <p className="employee-ride__map-label">Live map</p>
+              <LiveTripMap
+                mapOnly
+                className="ride-detail__map-el employee-ride__map-el"
+                points={mapPoints}
+                focusIndex={focusIdx}
+                externalPosition={externalPos}
+                trail={trail}
+                markerLabel={request.drivers?.full_name ?? "Driver"}
+              />
             </section>
           </aside>
         ) : null}

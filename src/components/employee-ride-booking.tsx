@@ -13,12 +13,10 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { OsmRouteMap } from "@/components/osm-route-map";
 import { PlaceMapPicker } from "@/components/place-map-picker";
 import { PlanRideChooser } from "@/components/plan-ride-chooser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { MapPoint } from "@/components/trip-map";
 import { useAuth } from "@/lib/auth";
 import { toLocalInput, localInputToIso } from "@/lib/fleet";
 import { useIsDesktopLg } from "@/hooks/use-desktop-lg";
@@ -47,9 +45,21 @@ type RouteStopDraft = {
 
 type FocusField = "pickup" | "drop" | `stop-${number}` | null;
 
+/** Works on http://LAN-IP — crypto.randomUUID needs secure context and throws otherwise. */
+function draftId() {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch {
+    /* insecure context (mobile LAN http) */
+  }
+  return `draft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function newStop(): RouteStopDraft {
   return {
-    id: crypto.randomUUID(),
+    id: draftId(),
     placeId: "",
     name: "",
     address: "",
@@ -144,7 +154,6 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
   const [timeOpen, setTimeOpen] = useState(false);
   const [paxOpen, setPaxOpen] = useState(false);
   const [tripOpen, setTripOpen] = useState(false);
-  const [mapOpen, setMapOpen] = useState(false);
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dropSeeded, setDropSeeded] = useState(false);
@@ -158,7 +167,7 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
     if (dropSeeded || !initialDropId || !savedLocations.length) return;
     const loc = savedLocations.find((l) => l.id === initialDropId);
     if (!loc) return;
-    setDrop({ id: crypto.randomUUID(), ...applyLoc(loc) });
+    setDrop({ id: draftId(), ...applyLoc(loc) });
     setFocus("pickup");
     setFilter("");
     setDropSeeded(true);
@@ -221,53 +230,6 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
 
   /** Hide saved/search lists once route is set — show again only while typing/editing. */
   const showSuggest = isSearching || !placesReady;
-
-  const routeMapPoints: MapPoint[] = (() => {
-    const pts: MapPoint[] = [];
-    if (pickup.name.trim()) {
-      pts.push({
-        name: pickup.name,
-        address: pickup.address,
-        latitude: pickup.lat,
-        longitude: pickup.lng,
-        point_type: "pickup",
-      });
-    }
-    for (const s of stops) {
-      if (!s.name.trim()) continue;
-      pts.push({
-        name: s.name,
-        address: s.address,
-        latitude: s.lat,
-        longitude: s.lng,
-        point_type: "stop",
-      });
-    }
-    if (drop.name.trim()) {
-      pts.push({
-        name: drop.name,
-        address: drop.address,
-        latitude: drop.lat,
-        longitude: drop.lng,
-        point_type: "destination",
-      });
-    }
-    return pts;
-  })();
-
-  /** While typing, plot Nominatim hits so aside map never goes blank. */
-  const mapPreviewPoints: MapPoint[] = (() => {
-    if (isSearching && searchResults.length > 0) {
-      return searchResults.slice(0, 5).map((r, i) => ({
-        name: r.display_name.split(",")[0]?.trim() || r.display_name,
-        address: r.display_name,
-        latitude: Number(r.lat),
-        longitude: Number(r.lon),
-        point_type: i === 0 ? "pickup" : "stop",
-      }));
-    }
-    return routeMapPoints;
-  })();
 
   function applyPlace(
     field: FocusField,
@@ -409,7 +371,7 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
           const full = await reverseGeocode(lat, lng);
           const shortName = full?.split(",")[0]?.trim() || "Current location";
           setPickup({
-            id: crypto.randomUUID(),
+            id: draftId(),
             placeId: "",
             name: shortName,
             address: full ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
@@ -858,32 +820,20 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
               />
             </div>
 
-            {!isDesktop ? (
-              <div className="plan-ride__utils">
-                {focus ? (
-                  <button
-                    type="button"
-                    className="plan-ride__util"
-                    onClick={() => setMapPickerOpen(true)}
-                  >
-                    <span className="plan-ride__util-icon">
-                      <MapPin className="size-4" />
-                    </span>
-                    Set on map
-                  </button>
-                ) : null}
+            <div className="plan-ride__utils">
+              {focus ? (
                 <button
                   type="button"
-                  className="plan-ride__util plan-ride__util--map-mobile"
-                  onClick={() => setMapOpen(true)}
+                  className="plan-ride__util"
+                  onClick={() => setMapPickerOpen(true)}
                 >
                   <span className="plan-ride__util-icon">
                     <MapPin className="size-4" />
                   </span>
-                  Preview route on map
+                  Set on map
                 </button>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
 
             <div className="plan-ride__footer">
               <Button
@@ -899,8 +849,8 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
         </div>
 
         <aside className="plan-ride__aside">
-          <section className="plan-ride__map-card" aria-label="Route preview">
-            {isDesktop && mapPickerOpen ? (
+          {isDesktop && mapPickerOpen ? (
+            <section className="plan-ride__map-card" aria-label="Set place on map">
               <PlaceMapPicker
                 variant="panel"
                 open={mapPickerOpen}
@@ -911,36 +861,8 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
                 initialLng={mapPickerSeed().lng}
                 onConfirm={confirmMapPick}
               />
-            ) : (
-              <>
-                <div className="plan-ride__map-card-head">
-                  <p className="plan-ride__aside-label">Route preview</p>
-                  {focus ? (
-                    <button
-                      type="button"
-                      className="plan-ride__map-pick"
-                      onClick={() => setMapPickerOpen(true)}
-                    >
-                      Set pin on map
-                    </button>
-                  ) : null}
-                </div>
-                <OsmRouteMap
-                  points={mapPreviewPoints}
-                  className="plan-ride__map-el"
-                  showSummary={!isSearching}
-                  drawRoute={!isSearching}
-                  emptyHint={
-                    isSearching
-                      ? searching
-                        ? "Searching places…"
-                        : "Tap a result to place it on the map"
-                      : "Add pickup and drop — or set a pin"
-                  }
-                />
-              </>
-            )}
-          </section>
+            </section>
+          ) : null}
         </aside>
       </div>
 
@@ -1035,21 +957,6 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
                 );
               })}
             </div>
-          </PlanRideChooser>
-
-          <PlanRideChooser open={mapOpen} onOpenChange={setMapOpen} title="Route preview" wide>
-            <div className="overflow-hidden rounded-xl border border-[var(--pr-border)]">
-              <OsmRouteMap
-                points={mapPreviewPoints}
-                className="h-64 w-full"
-                showSummary={!isSearching}
-                drawRoute={!isSearching}
-                emptyHint="Add pickup and Where to? — or search a place"
-              />
-            </div>
-            <Button type="button" className="mt-3 w-full" onClick={() => setMapOpen(false)}>
-              Close
-            </Button>
           </PlanRideChooser>
         </>
       ) : null}

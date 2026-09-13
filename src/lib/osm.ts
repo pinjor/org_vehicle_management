@@ -182,14 +182,11 @@ export async function searchPlaces(query: string, limit = 6): Promise<NominatimR
   }
 }
 
-/** Free street basemap — Esri World Street Map (no API key). */
+/** Free street basemap — OSM.fr (no API key). */
 export function osmTileLayer(L: typeof import("leaflet")) {
-  return L.tileLayer(
-    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
-    {
-      attribution:
-        "Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom",
-      maxZoom: 19,
-    },
-  );
+  return L.tileLayer("https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap",
+    subdomains: "abc",
+    maxZoom: 18,
+  });
 }

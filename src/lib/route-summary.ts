@@ -27,6 +27,20 @@ export function routeLine(points: RoutePointLike[] | undefined | null): string |
   return null;
 }
 
+/** Card / list: keep short when many stops so layout doesn't blow out. */
+export function routeLineCompact(
+  points: RoutePointLike[] | undefined | null,
+  maxPoints = 4,
+): string | null {
+  const sorted = sortRoutePoints(points ?? []).filter((p) => p.name?.trim());
+  if (sorted.length === 0) return routeLine(points);
+  if (sorted.length <= maxPoints) return routeLine(sorted);
+  const first = sorted[0]!.name.trim();
+  const last = sorted[sorted.length - 1]!.name.trim();
+  const mid = sorted.length - 2;
+  return `${first} → ${mid} stop${mid === 1 ? "" : "s"} → ${last}`;
+}
+
 export type PassengerLike = {
   full_name?: string | null;
   phone?: string | null;

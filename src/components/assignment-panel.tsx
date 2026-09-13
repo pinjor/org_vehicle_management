@@ -10,11 +10,43 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/fleet-ui";
+import { DRIVER_STATUS, VEHICLE_STATUS } from "@/lib/fleet";
 import {
   useAssignRequest,
   useDrivers,
   useVehicles,
+  type DriverRecord,
+  type VehicleRecord,
 } from "@/lib/queries";
+import { cn } from "@/lib/utils";
+
+function vehicleBlockReason(v: VehicleRecord, passengers: number): string | null {
+  if (Number(v.seat_capacity) < passengers) return "Too few seats";
+  if (v.operational_status === "available") return null;
+  const short: Record<string, string> = {
+    reserved: "Reserved",
+    on_trip: "On trip",
+    under_maintenance: "Maintenance",
+    unavailable: "Unavailable",
+    out_of_service: "Out of service",
+    retired: "Retired",
+  };
+  return short[v.operational_status] ?? VEHICLE_STATUS[v.operational_status]?.label ?? v.operational_status;
+}
+
+function driverBlockReason(d: DriverRecord): string | null {
+  if (d.current_status === "available") return null;
+  const short: Record<string, string> = {
+    reserved: "Reserved",
+    driving: "On trip",
+    break: "On break",
+    off_duty: "Off duty",
+    leave: "On leave",
+    unavailable: "Unavailable",
+    suspended: "Suspended",
+  };
+  return short[d.current_status] ?? DRIVER_STATUS[d.current_status]?.label ?? d.current_status;
+}
 
 export function AssignmentPanel({
   requestId,
@@ -41,43 +73,70 @@ export function AssignmentPanel({
   const [vehicleId, setVehicleId] = useState(initialVehicleId ?? "");
   const [driverId, setDriverId] = useState(initialDriverId ?? "");
 
-  const availableVehicles = useMemo(
-    () =>
-      (vehicles.data ?? []).filter(
-        (v) =>
-          (v.operational_status === "available" || v.id === initialVehicleId) &&
-          Number(v.seat_capacity) >= passengers,
-      ),
-    [vehicles.data, passengers, initialVehicleId],
-  );
+  const vehicleOptions = useMemo(() => {
+    const rows = [...(vehicles.data ?? [])];
+    rows.sort((a, b) => {
+      const aOk = !vehicleBlockReason(a, passengers) || a.id === initialVehicleId ? 0 : 1;
+      const bOk = !vehicleBlockReason(b, passengers) || b.id === initialVehicleId ? 0 : 1;
+      if (aOk !== bOk) return aOk - bOk;
+      return a.fleet_number.localeCompare(b.fleet_number);
+    });
+    return rows;
+  }, [vehicles.data, passengers, initialVehicleId]);
 
-  const availableDrivers = useMemo(
-    () =>
-      (drivers.data ?? []).filter(
-        (d) => d.current_status === "available" || d.id === initialDriverId,
-      ),
-    [drivers.data, initialDriverId],
-  );
+  const driverOptions = useMemo(() => {
+    const rows = [...(drivers.data ?? [])];
+    rows.sort((a, b) => {
+      const aOk = !driverBlockReason(a) || a.id === initialDriverId ? 0 : 1;
+      const bOk = !driverBlockReason(b) || b.id === initialDriverId ? 0 : 1;
+      if (aOk !== bOk) return aOk - bOk;
+      return a.full_name.localeCompare(b.full_name);
+    });
+    return rows;
+  }, [drivers.data, initialDriverId]);
 
-  const vehicle = availableVehicles.find((v) => v.id === vehicleId);
-  const driver = availableDrivers.find((d) => d.id === driverId);
-  const canSubmit = !!vehicle && !!driver;
+  const vehicle = vehicleOptions.find((v) => v.id === vehicleId);
+  const driver = driverOptions.find((d) => d.id === driverId);
+
+  const vehicleSelectable =
+    !!vehicle &&
+    (!vehicleBlockReason(vehicle, passengers) || vehicle.id === initialVehicleId);
+  const driverSelectable =
+    !!driver && (!driverBlockReason(driver) || driver.id === initialDriverId);
+  const canSubmit = vehicleSelectable && driverSelectable;
+
+  const freeVehicleCount = vehicleOptions.filter((v) => !vehicleBlockReason(v, passengers)).length;
+  const freeDriverCount = driverOptions.filter((d) => !driverBlockReason(d)).length;
 
   function pickVehicle(id: string) {
+    const v = vehicleOptions.find((x) => x.id === id);
+    if (!v) return;
+    if (vehicleBlockReason(v, passengers) && v.id !== initialVehicleId) {
+      toast.error(vehicleBlockReason(v, passengers) ?? "Vehicle unavailable");
+      return;
+    }
     setVehicleId(id);
-    const v = availableVehicles.find((x) => x.id === id);
-    if (v?.primary_driver_id) {
-      const linked = availableDrivers.find((d) => d.id === v.primary_driver_id);
-      if (linked) setDriverId(linked.id);
+    if (v.primary_driver_id) {
+      const linked = driverOptions.find((d) => d.id === v.primary_driver_id);
+      if (linked && (!driverBlockReason(linked) || linked.id === initialDriverId)) {
+        setDriverId(linked.id);
+      }
     }
   }
 
   function pickDriver(id: string) {
+    const d = driverOptions.find((x) => x.id === id);
+    if (!d) return;
+    if (driverBlockReason(d) && d.id !== initialDriverId) {
+      toast.error(driverBlockReason(d) ?? "Driver unavailable");
+      return;
+    }
     setDriverId(id);
-    const d = availableDrivers.find((x) => x.id === id);
-    if (d?.primary_vehicle_id) {
-      const linked = availableVehicles.find((v) => v.id === d.primary_vehicle_id);
-      if (linked) setVehicleId(linked.id);
+    if (d.primary_vehicle_id) {
+      const linked = vehicleOptions.find((v) => v.id === d.primary_vehicle_id);
+      if (linked && (!vehicleBlockReason(linked, passengers) || linked.id === initialVehicleId)) {
+        setVehicleId(linked.id);
+      }
     }
   }
 
@@ -92,8 +151,8 @@ export function AssignmentPanel({
   }
 
   function runAssign() {
-    if (!vehicle || !driver) {
-      toast.error("Pick a vehicle and a driver");
+    if (!vehicle || !driver || !canSubmit) {
+      toast.error("Pick an available vehicle and driver");
       return;
     }
     assign.mutate(
@@ -126,12 +185,34 @@ export function AssignmentPanel({
             <SelectTrigger id="assign-vehicle" className="h-10 w-full min-w-0">
               <SelectValue placeholder="Select vehicle" />
             </SelectTrigger>
-            <SelectContent className="max-h-40 max-w-[min(100vw-2rem,20rem)] sm:max-h-56">
-              {availableVehicles.map((v) => (
-                <SelectItem key={v.id} value={v.id}>
-                  {v.fleet_number} · {v.name} ({v.seat_capacity})
-                </SelectItem>
-              ))}
+            <SelectContent className="max-h-52 max-w-[min(100vw-2rem,22rem)] sm:max-h-64">
+              {vehicleOptions.map((v) => {
+                const reason = vehicleBlockReason(v, passengers);
+                const blocked = !!reason && v.id !== initialVehicleId;
+                return (
+                  <SelectItem
+                    key={v.id}
+                    value={v.id}
+                    disabled={blocked}
+                    className={cn(
+                      "items-start py-1.5",
+                      blocked && "text-destructive data-[disabled]:opacity-100",
+                    )}
+                  >
+                    <span className="flex w-full min-w-0 items-baseline justify-between gap-2">
+                      <span className="min-w-0 truncate">
+                        {v.fleet_number} · {v.name}
+                        {!blocked ? ` (${v.seat_capacity})` : ""}
+                      </span>
+                      {blocked ? (
+                        <span className="shrink-0 text-[10px] font-semibold leading-tight text-destructive sm:text-[11px]">
+                          {reason}
+                        </span>
+                      ) : null}
+                    </span>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>
@@ -143,23 +224,42 @@ export function AssignmentPanel({
             <SelectTrigger id="assign-driver" className="h-10 w-full min-w-0">
               <SelectValue placeholder="Select driver" />
             </SelectTrigger>
-            <SelectContent className="max-h-40 max-w-[min(100vw-2rem,20rem)] sm:max-h-56">
-              {availableDrivers.map((d) => (
-                <SelectItem key={d.id} value={d.id}>
-                  {d.full_name}
-                </SelectItem>
-              ))}
+            <SelectContent className="max-h-52 max-w-[min(100vw-2rem,22rem)] sm:max-h-64">
+              {driverOptions.map((d) => {
+                const reason = driverBlockReason(d);
+                const blocked = !!reason && d.id !== initialDriverId;
+                return (
+                  <SelectItem
+                    key={d.id}
+                    value={d.id}
+                    disabled={blocked}
+                    className={cn(
+                      "items-start py-1.5",
+                      blocked && "text-destructive data-[disabled]:opacity-100",
+                    )}
+                  >
+                    <span className="flex w-full min-w-0 items-baseline justify-between gap-2">
+                      <span className="min-w-0 truncate">{d.full_name}</span>
+                      {blocked ? (
+                        <span className="shrink-0 text-[10px] font-semibold leading-tight text-destructive sm:text-[11px]">
+                          {reason}
+                        </span>
+                      ) : null}
+                    </span>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>
       </div>
-      {availableVehicles.length === 0 && (
+      {freeVehicleCount === 0 && (
         <p className="text-[11px] text-muted-foreground">No free vehicles with enough seats.</p>
       )}
-      {availableDrivers.length === 0 && (
+      {freeDriverCount === 0 && (
         <p className="text-[11px] text-muted-foreground">No free drivers.</p>
       )}
-      {canSubmit && (
+      {canSubmit && vehicle && driver && (
         <p className="text-[11px] text-muted-foreground">
           {vehicle.fleet_number} · {vehicle.name} + {driver.full_name}
           {linkedHint ? ` (${linkedHint})` : ""}

@@ -1,5 +1,6 @@
 import { Link, useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   Bell,
@@ -8,6 +9,7 @@ import {
   Car,
   ClipboardList,
   LayoutDashboard,
+  Loader2,
   LogOut,
   Menu,
   MoreHorizontal,
@@ -25,6 +27,7 @@ import { AdminRequestAlert } from "@/components/admin-request-alert";
 import { WorkspaceSkeleton } from "@/components/loading-skeletons";
 import { AppIcon } from "@/components/app-icon";
 import { LanguageToggle } from "@/components/language-toggle";
+import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { useAuth } from "@/lib/auth";
 import { relativeTime } from "@/lib/fleet";
 import { useI18n } from "@/lib/i18n";
@@ -259,7 +262,9 @@ export function AppShell({
   const { t, isDriverPortal } = useI18n();
   const navigate = useNavigate();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const shellMainRef = useRef<HTMLDivElement>(null);
   const { data: notificationsRaw } = useNotifications(user?.id);
   const notifications = (notificationsRaw ?? []) as AppNotification[];
   const markRead = useMarkNotificationRead();
@@ -273,6 +278,13 @@ export function AppShell({
       return false;
     }
   });
+
+  const { pullDistance, refreshing, threshold } = usePullToRefresh(
+    shellMainRef,
+    async () => {
+      await Promise.all([queryClient.invalidateQueries(), router.invalidate()]);
+    },
+  );
 
   const resolveLabel = (item: NavItem) =>
     isDriverPortal && item.labelKey ? t(item.labelKey) : item.label;
@@ -362,7 +374,7 @@ export function AppShell({
     <TooltipProvider delayDuration={0}>
     <div
       className={cn(
-        "flex min-h-screen bg-background",
+        "app-shell-root flex min-h-screen bg-background",
         hideMobileSidebar && "employee-portal",
         employeeRideChrome && "employee-portal--ride",
         hideMobileShellHeader && "app-shell--no-mobile-header",
@@ -425,11 +437,35 @@ export function AppShell({
       </aside>
 
       <div
+        ref={shellMainRef}
         className={cn(
           "app-shell-main flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip",
           fillViewport && "lg:h-svh lg:max-h-svh lg:overflow-hidden",
         )}
       >
+        <div
+          className={cn(
+            "pull-refresh",
+            (pullDistance > 0 || refreshing) && "pull-refresh--visible",
+            refreshing && "pull-refresh--busy",
+            pullDistance >= threshold && !refreshing && "pull-refresh--armed",
+          )}
+          style={{
+            height: refreshing ? 44 : pullDistance,
+            opacity: refreshing || pullDistance > 8 ? 1 : pullDistance / 24,
+          }}
+          aria-hidden={!refreshing && pullDistance < 8}
+        >
+          <Loader2
+            className={cn(
+              "pull-refresh__icon size-5",
+              (refreshing || pullDistance >= threshold) && "pull-refresh__icon--spin",
+            )}
+          />
+          <span className="pull-refresh__label">
+            {refreshing ? "Refreshing…" : pullDistance >= threshold ? "Release to refresh" : "Pull to refresh"}
+          </span>
+        </div>
         <header
           className={cn(
             "app-page-header sticky top-0 z-20 flex flex-nowrap items-center justify-between gap-x-2",

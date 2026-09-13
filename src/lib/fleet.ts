@@ -1,5 +1,11 @@
 export type AppRole = "employee" | "transport_admin" | "fleet_manager" | "driver" | "system_admin";
 
+/** UI label for passenger count — avoid airline jargon "pax". */
+export function passengerLabel(count: number): string {
+  const n = Math.max(0, Math.floor(Number(count)) || 0);
+  return n === 1 ? "1 passenger" : `${n} passengers`;
+}
+
 export type Tone =
   | "success"
   | "warning"
@@ -21,28 +27,29 @@ export const ROSTER_ROLE: Record<RosterRole, { label: string; tone: Tone }> = {
 };
 
 export const REQUEST_STATUS: Record<string, { label: string; tone: Tone }> = {
-  submitted: { label: "Awaiting review", tone: "warning" },
+  submitted: { label: "Pending", tone: "warning" },
+  under_review: { label: "Pending", tone: "warning" },
   approved: { label: "Approved", tone: "info" },
   rejected: { label: "Rejected", tone: "danger" },
   assigned: { label: "Assigned", tone: "primary" },
-  in_progress: { label: "In progress", tone: "success" },
-  completed: { label: "Completed", tone: "neutral" },
+  in_progress: { label: "Active", tone: "success" },
+  completed: { label: "Done", tone: "neutral" },
   cancelled: { label: "Cancelled", tone: "danger" },
 };
 
 export const TRIP_STATUS: Record<string, { label: string; tone: Tone }> = {
-  driver_assigned: { label: "Driver assigned", tone: "primary" },
-  driver_confirmed: { label: "Driver confirmed", tone: "primary" },
-  heading_to_pickup: { label: "Heading to pickup", tone: "info" },
-  arrived_pickup: { label: "Arrived at pickup", tone: "info" },
-  passenger_picked_up: { label: "Passenger on board", tone: "success" },
-  in_transit: { label: "In transit", tone: "success" },
-  stop_reached: { label: "Stop reached", tone: "info" },
-  destination_reached: { label: "At destination", tone: "info" },
-  passenger_dropped: { label: "Passenger dropped", tone: "success" },
-  return_pending: { label: "Return pending", tone: "warning" },
-  return_in_transit: { label: "Return journey", tone: "success" },
-  completed: { label: "Completed", tone: "neutral" },
+  driver_assigned: { label: "Assigned", tone: "primary" },
+  driver_confirmed: { label: "Confirmed", tone: "primary" },
+  heading_to_pickup: { label: "To pickup", tone: "info" },
+  arrived_pickup: { label: "At pickup", tone: "info" },
+  passenger_picked_up: { label: "On board", tone: "success" },
+  in_transit: { label: "On way", tone: "success" },
+  stop_reached: { label: "At stop", tone: "info" },
+  destination_reached: { label: "At drop", tone: "info" },
+  passenger_dropped: { label: "Dropped", tone: "success" },
+  return_pending: { label: "Return soon", tone: "warning" },
+  return_in_transit: { label: "Returning", tone: "success" },
+  completed: { label: "Done", tone: "neutral" },
   cancelled: { label: "Cancelled", tone: "danger" },
   breakdown: { label: "Breakdown", tone: "danger" },
 };
@@ -305,6 +312,8 @@ export function nextDriverActions(
   status: string,
   hasStops: boolean,
   isRoundTrip: boolean,
+  /** Intermediate stops still ahead (stopCount - current_stop_index). */
+  remainingStops = 0,
 ): { action: string; label: string; primary?: boolean; hint?: string }[] {
   switch (status) {
     case "driver_assigned":
@@ -320,12 +329,20 @@ export function nextDriverActions(
         ? [{ action: "depart", label: "Start journey", primary: true, hint: "Leave pickup and head toward the next stop" }]
         : [{ action: "reach_destination", label: "Reached destination", primary: true, hint: "You've arrived at the drop-off location" }];
     case "in_transit":
-      return hasStops
-        ? [
-            { action: "reach_stop", label: "Confirm stop reached", primary: true, hint: "Mark this intermediate stop as complete" },
-            { action: "reach_destination", label: "Reached final destination", hint: "Skip remaining stops and arrive at final drop" },
-          ]
-        : [{ action: "reach_destination", label: "Reached destination", primary: true, hint: "You've arrived at the drop-off location" }];
+      // Intermediate stop ahead → At stop only. Last leg / final drop → destination only.
+      if (remainingStops > 0) {
+        return [
+          { action: "reach_stop", label: "Confirm stop reached", primary: true, hint: "Mark this intermediate stop as complete" },
+        ];
+      }
+      return [
+        {
+          action: "reach_destination",
+          label: hasStops ? "Reached final destination" : "Reached destination",
+          primary: true,
+          hint: hasStops ? "Arrive at final drop" : "You've arrived at the drop-off location",
+        },
+      ];
     case "stop_reached":
       return [{ action: "depart", label: "Continue to next point", primary: true, hint: "Resume driving toward the next route point" }];
     case "destination_reached":
@@ -339,6 +356,38 @@ export function nextDriverActions(
     default:
       return isRoundTrip ? [] : [];
   }
+}
+
+/** Dashboard / panel: Accept → Start ride → End ride (red). */
+export type SimplifiedDriverCta = {
+  action: "confirm" | "start_ride" | "end_ride";
+  kind: "accept" | "start" | "end";
+};
+
+export function simplifiedDriverCta(status: string): SimplifiedDriverCta | null {
+  if (status === "driver_assigned") {
+    return { action: "confirm", kind: "accept" };
+  }
+  if (
+    ["driver_confirmed", "heading_to_pickup", "arrived_pickup", "passenger_picked_up"].includes(
+      status,
+    )
+  ) {
+    return { action: "start_ride", kind: "start" };
+  }
+  if (
+    [
+      "in_transit",
+      "stop_reached",
+      "destination_reached",
+      "passenger_dropped",
+      "return_pending",
+      "return_in_transit",
+    ].includes(status)
+  ) {
+    return { action: "end_ride", kind: "end" };
+  }
+  return null;
 }
 
 export function formatTime(value?: string | null) {

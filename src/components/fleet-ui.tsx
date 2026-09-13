@@ -549,32 +549,14 @@ export function RouteTimeline({
   points: { name: string; address?: string | null; point_type: string; expected_at?: string | null }[];
   activeIndex?: number;
 }) {
+  const names = points.map((p) => p.name.trim()).filter(Boolean);
+  const line = names.length > 0 ? names.join(" → ") : null;
+  if (!line) return null;
+  const focus = activeIndex >= 0 && activeIndex < points.length ? points[activeIndex]?.name : null;
   return (
-    <ol className="motion-timeline relative space-y-2.5 pl-5">
-      <span className="absolute top-1.5 bottom-1.5 left-[5px] w-px bg-border" aria-hidden />
-      {points.map((p, i) => {
-        const done = activeIndex > i;
-        const active = activeIndex === i;
-        return (
-          <li key={`${p.name}-${i}`} className="relative">
-            <span
-              className={cn(
-                "absolute top-1 -left-5 size-2.5 rounded-full border-2 bg-background",
-                done ? "border-success bg-success" : active ? "motion-timeline-active border-primary bg-primary" : "border-border",
-              )}
-              aria-hidden
-            />
-            <p className="text-xs font-medium sm:text-sm">{p.name}</p>
-            {p.address && <p className="text-[11px] text-muted-foreground sm:text-xs">{p.address}</p>}
-            <div className="mt-1">
-              <MetaChip
-                label={p.point_type.replace(/_/g, " ")}
-                tone={i === 0 ? "primary" : i === points.length - 1 ? "success" : "info"}
-              />
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+    <p className="route-line text-sm font-semibold leading-snug" aria-label="Route">
+      {line}
+      {focus ? <span className="route-line__now"> · now {focus}</span> : null}
+    </p>
   );
 }

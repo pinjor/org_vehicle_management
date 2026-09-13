@@ -14,9 +14,10 @@ import {
   StatusChip,
 } from "@/components/fleet-ui";
 import { useAuth } from "@/lib/auth";
-import { sortRequestsList } from "@/lib/fleet";
+import { passengerLabel, sortRequestsList } from "@/lib/fleet";
 import { formatBdPhone } from "@/lib/phone";
 import { useAdminEmployee } from "@/lib/queries";
+import { routeLineCompact } from "@/lib/route-summary";
 
 export const Route = createFileRoute("/admin/employees/$employeeId")({
   head: () => ({
@@ -95,11 +96,12 @@ function EmployeeProfilePage() {
                 <ListRow key={r.id}>
                   <TripListRow
                     when={r.pickup_at}
-                    title={r.purpose || r.reference}
+                    title={routeLineCompact(r.request_route_points) || r.purpose || r.reference}
                     subtitle={[
+                      r.purpose && routeLineCompact(r.request_route_points) ? r.purpose : null,
                       r.drivers?.full_name ? `Driver ${r.drivers.full_name}` : null,
                       r.vehicles?.registration_number,
-                      `${r.passenger_count} pax`,
+                      passengerLabel(r.passenger_count),
                       r.reference,
                     ]
                       .filter(Boolean)

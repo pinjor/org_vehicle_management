@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { RouteTimeline, WhenRail, WhenStamp } from "@/components/info-blocks";
+import { WhenRail, WhenStamp } from "@/components/info-blocks";
 import { AssignmentPanel } from "@/components/assignment-panel";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,10 +13,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth";
-import { relativeTime } from "@/lib/fleet";
+import { relativeTime, passengerLabel } from "@/lib/fleet";
 import { formatBdPhone } from "@/lib/phone";
 import type { RequestRow } from "@/lib/queries";
 import { useDecideRequest, useRequests } from "@/lib/queries";
+import { routeLineCompact } from "@/lib/route-summary";
 
 /** Toast + modal when new employee requests arrive (admin/dispatcher only). */
 export function AdminRequestAlert() {
@@ -55,6 +56,7 @@ export function AdminRequestAlert() {
 
   const canAssign = ["submitted", "approved"].includes(popup.status);
   const stopCount = (popup.request_route_points ?? []).filter((p) => p.point_type === "stop").length;
+  const route = routeLineCompact(popup.request_route_points);
 
   return (
     <Dialog open onOpenChange={(open) => !open && setPopup(null)}>
@@ -72,15 +74,13 @@ export function AdminRequestAlert() {
             <div className="min-w-0 space-y-2 text-sm">
               <p className="font-semibold leading-snug">{popup.requester_name}</p>
               {popup.requester_phone ? (
-                <a href={`tel:${popup.requester_phone}`} className="text-xs font-medium text-primary hover:underline">
+                <p className="text-xs font-medium text-muted-foreground">
                   {formatBdPhone(popup.requester_phone)}
-                </a>
+                </p>
               ) : null}
-              <RouteTimeline
-                {...(popup.request_route_points ? { points: popup.request_route_points } : {})}
-              />
+              {route ? <p className="ops-card__route-line text-sm font-semibold leading-snug">{route}</p> : null}
               <p className="text-xs text-muted-foreground inline-flex flex-wrap items-baseline gap-x-1 gap-y-0.5">
-                <span>{popup.passenger_count} pax</span>
+                <span>{passengerLabel(popup.passenger_count)}</span>
                 {popup.expected_end_at ? (
                   <>
                     <span>· drop by</span>

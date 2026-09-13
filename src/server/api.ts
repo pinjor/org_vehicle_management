@@ -73,7 +73,7 @@ app.post("/api/auth/signup", async (c) => {
   if (!normalized) return c.json({ error: "Invalid phone" }, 400);
   const { token, user } = await signupUser(normalized, password);
   setSessionCookie(c, token);
-  return json(c, { user });
+  return json(c, { user, token });
 });
 
 app.post("/api/auth/login", async (c) => {
@@ -82,7 +82,7 @@ app.post("/api/auth/login", async (c) => {
   if (!normalized) return c.json({ error: "Invalid phone" }, 400);
   const { token, user } = await loginUser(normalized, password);
   setSessionCookie(c, token);
-  return json(c, { user });
+  return json(c, { user, token });
 });
 
 app.post("/api/auth/logout", (c) => {
@@ -375,6 +375,16 @@ app.get("/api/admin/employees/:id", async (c) => {
   if (!profiles[0]) return c.json({ error: "Not found" }, 404);
   const { rows: requests } = await query(
     `select vr.id, vr.reference, vr.purpose, vr.status, vr.pickup_at, vr.passenger_count,
+      coalesce((
+        select json_agg(
+          json_build_object(
+            'name', rp.name,
+            'point_type', rp.point_type,
+            'sequence', rp.sequence
+          ) order by rp.sequence
+        )
+        from request_route_points rp where rp.request_id = vr.id
+      ), '[]'::json) as request_route_points,
       case when v.id is not null then json_build_object(
         'name', v.name, 'registration_number', v.registration_number
       ) end as vehicles,
@@ -674,7 +684,15 @@ app.get("/api/trips/vehicle/:vehicleId", async (c) => {
       json_build_object('full_name', d.full_name, 'phone', d.phone, 'driver_code', d.driver_code) as drivers,
       (
         select row_to_json(rq) from (
-          select vr.id, vr.reference, vr.purpose, vr.pickup_at, vr.requester_name, vr.requester_phone, vr.passenger_count
+          select vr.id, vr.reference, vr.purpose, vr.pickup_at, vr.requester_name, vr.requester_phone, vr.passenger_count,
+            coalesce((
+              select json_agg(json_build_object(
+                'name', rp.name,
+                'point_type', rp.point_type,
+                'sequence', rp.sequence
+              ) order by rp.sequence)
+              from request_route_points rp where rp.request_id = vr.id
+            ), '[]'::json) as request_route_points
           from vehicle_requests vr where vr.id = t.request_id
         ) rq
       ) as vehicle_requests

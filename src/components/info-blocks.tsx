@@ -1,7 +1,7 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { formatDate, formatTime, relativeTime } from "@/lib/fleet";
-import { routeEndpoints, sortRoutePoints, type RoutePointLike } from "@/lib/route-summary";
+import { routeLine, type RoutePointLike } from "@/lib/route-summary";
 import { cn } from "@/lib/utils";
 
 /** Short date for rails — omit year when current year. */
@@ -17,7 +17,7 @@ export function formatCardDate(value?: string | null) {
   });
 }
 
-/** Highlighted pickup clock — 12h time + date + relative. Use on every trip/request surface. */
+/** Highlighted pickup clock — date first, then time (same size), then relative. */
 export function WhenRail({
   at,
   className,
@@ -34,8 +34,8 @@ export function WhenRail({
       className={cn("when-rail", size === "sm" && "when-rail--sm", size === "lg" && "when-rail--lg", className)}
       aria-label={`Pickup ${formatDate(at)} ${formatTime(at)}`}
     >
-      <span className="when-rail__time">{formatTime(at)}</span>
       <span className="when-rail__date">{formatCardDate(at)}</span>
+      <span className="when-rail__time">{formatTime(at)}</span>
       {rel ? <span className="when-rail__rel">{rel}</span> : null}
     </div>
   );
@@ -53,8 +53,8 @@ export function WhenBanner({
   const rel = relativeTime(at);
   return (
     <div className={cn("when-banner", className)} aria-label={`Pickup ${formatDate(at)} ${formatTime(at)}`}>
-      <span className="when-banner__time">{formatTime(at)}</span>
       <span className="when-banner__date">{formatCardDate(at)}</span>
+      <span className="when-banner__time">{formatTime(at)}</span>
       {rel ? <span className="when-banner__rel">{rel}</span> : null}
     </div>
   );
@@ -71,47 +71,51 @@ export function RouteTimeline({
   points?: RoutePointLike[] | null | undefined;
   className?: string | undefined;
 }) {
-  const sorted = sortRoutePoints(points ?? []);
-  if (sorted.length > 0) {
-    return (
-      <div className={cn("route-timeline", className)} aria-label="Route">
-        {sorted.map((p, i) => {
-          const tone =
-            p.point_type === "pickup"
-              ? "pick"
-              : p.point_type === "destination"
-                ? "drop"
-                : "stop";
-          return (
-            <div key={`${p.point_type}-${p.sequence ?? i}-${p.name}`} className="route-timeline__stop">
-              <span className={cn("route-timeline__dot", `route-timeline__dot--${tone}`)} />
-              <span className="route-timeline__name">{p.name}</span>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
-  const ends =
-    pickup || drop
-      ? { pickup, drop }
-      : routeEndpoints(points);
-  if (!ends.pickup && !ends.drop) return null;
+  const line =
+    routeLine(points) ??
+    (pickup?.name && drop?.name
+      ? `${pickup.name} → ${drop.name}`
+      : pickup?.name?.trim() || drop?.name?.trim() || null);
+  if (!line) return null;
   return (
-    <div className={cn("route-timeline", className)} aria-label="Route">
-      {ends.pickup ? (
-        <div className="route-timeline__stop">
-          <span className="route-timeline__dot route-timeline__dot--pick" />
-          <span className="route-timeline__name">{ends.pickup.name}</span>
-        </div>
-      ) : null}
-      {ends.drop ? (
-        <div className="route-timeline__stop">
-          <span className="route-timeline__dot route-timeline__dot--drop" />
-          <span className="route-timeline__name">{ends.drop.name}</span>
-        </div>
-      ) : null}
+    <p className={cn("route-line", className)} aria-label="Route">
+      {line}
+    </p>
+  );
+}
+
+/** Detail pages: each stop wraps on its own so long multi-stop routes never overflow. */
+export function RouteFlow({
+  points,
+  focusIndex,
+  className,
+}: {
+  points: { name?: string | null; point_type?: string }[];
+  focusIndex?: number;
+  className?: string;
+}) {
+  const stops = points.map((p) => p.name?.trim()).filter((n): n is string => !!n);
+  if (stops.length === 0) return null;
+  return (
+    <div className={cn("route-flow", className)} aria-label="Route">
+      {stops.map((name, i) => (
+        <span key={`${name}-${i}`} className="route-flow__item">
+          {i > 0 ? (
+            <span className="route-flow__sep" aria-hidden>
+              →
+            </span>
+          ) : null}
+          <span
+            className={cn(
+              "route-flow__stop",
+              focusIndex === i && "route-flow__stop--now",
+            )}
+          >
+            {name}
+            {focusIndex === i ? <span className="route-flow__now"> · now</span> : null}
+          </span>
+        </span>
+      ))}
     </div>
   );
 }
@@ -130,8 +134,8 @@ export function WhenStamp({
   const rel = withRelative ? relativeTime(at) : "";
   return (
     <time className={cn("when-stamp", className)} dateTime={at}>
-      <span className="when-stamp__time">{formatTime(at)}</span>
       <span className="when-stamp__date">{formatCardDate(at)}</span>
+      <span className="when-stamp__time">{formatTime(at)}</span>
       {rel ? <span className="when-stamp__rel">{rel}</span> : null}
     </time>
   );

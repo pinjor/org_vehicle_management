@@ -29,6 +29,7 @@ import {
   kmUntilService,
   serviceTone,
 } from "@/lib/fleet";
+import { routeLineCompact } from "@/lib/route-summary";
 import {
   useDrivers,
   useUnavailabilityRequests,
@@ -471,12 +472,19 @@ function VehicleProfilePage() {
                     <ListRow key={t.id}>
                       <TripListRow
                         when={t.vehicle_requests?.pickup_at ?? t.created_at}
-                        title={t.vehicle_requests?.requester_name?.trim() || t.vehicle_requests?.purpose || t.reference}
+                        title={
+                          routeLineCompact(t.vehicle_requests?.request_route_points) ||
+                          t.vehicle_requests?.requester_name?.trim() ||
+                          t.vehicle_requests?.purpose ||
+                          t.reference
+                        }
                         subtitle={[
-                          t.drivers?.full_name ? `Driver ${t.drivers.full_name}` : null,
-                          t.vehicle_requests?.purpose && t.vehicle_requests?.requester_name
-                            ? t.vehicle_requests.purpose
+                          t.vehicle_requests?.requester_name?.trim() &&
+                          routeLineCompact(t.vehicle_requests?.request_route_points)
+                            ? t.vehicle_requests.requester_name.trim()
                             : null,
+                          t.drivers?.full_name ? `Driver ${t.drivers.full_name}` : null,
+                          t.vehicle_requests?.purpose,
                           t.reference,
                         ]
                           .filter(Boolean)

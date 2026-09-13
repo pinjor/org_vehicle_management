@@ -8,7 +8,7 @@ import { LookupChip } from "@/components/lookup-chip";
 import { useAuth } from "@/lib/auth";
 import { sortTripsList } from "@/lib/fleet";
 import { useI18n } from "@/lib/i18n";
-import { routeLine } from "@/lib/route-summary";
+import { routeLineCompact } from "@/lib/route-summary";
 import { useDriverTrips } from "@/lib/queries";
 
 export const Route = createFileRoute("/my-trips/")({
@@ -77,7 +77,7 @@ function MyTripsPage() {
                 <li key={trip.id}>
                   <TripListRow
                     when={trip.vehicle_requests?.pickup_at ?? trip.created_at}
-                    title={routeLine(trip.vehicle_requests?.request_route_points) ?? trip.reference}
+                    title={routeLineCompact(trip.vehicle_requests?.request_route_points) ?? trip.reference}
                     subtitle={
                       [
                         trip.vehicle_requests?.requester_name,

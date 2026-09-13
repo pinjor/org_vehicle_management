@@ -3,15 +3,14 @@ import { useRef } from "react";
 import { ArrowLeft, Navigation, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { LiveTripMap } from "@/components/live-trip-map";
-import { WhenBanner, WhenStamp } from "@/components/info-blocks";
+import { WhenBanner, WhenStamp, RouteFlow } from "@/components/info-blocks";
 import { LookupChip } from "@/components/lookup-chip";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
-import type { MessageKey } from "@/lib/i18n/messages";
 import { useAdvanceTrip, usePingTripLocation } from "@/lib/queries";
-import { nextDriverActions } from "@/lib/fleet";
+import { passengerLabel, simplifiedDriverCta } from "@/lib/fleet";
 import { formatBdPhone } from "@/lib/phone";
-import { pointTone, trackFocusIndex } from "@/lib/ride-detail";
+import { trackFocusIndex } from "@/lib/ride-detail";
 import type { LatLng } from "@/lib/osm";
 import { cn } from "@/lib/utils";
 
@@ -52,32 +51,9 @@ type Pax = {
   is_primary?: boolean;
 };
 
-function actionCopy(
-  t: (key: MessageKey, vars?: Record<string, string | number>) => string,
-  action: string,
-  status: string,
-  hasStops: boolean,
-): { label: string; hint: string } {
-  if (action === "depart" && status === "stop_reached") {
-    return { label: t("driver.action.departContinue"), hint: t("driver.action.departContinueHint") };
-  }
-  if (action === "reach_destination" && hasStops && status === "in_transit") {
-    return {
-      label: t("driver.action.reach_destinationFinal"),
-      hint: t("driver.action.reach_destinationFinalHint"),
-    };
-  }
-  if (action === "complete" && status === "return_in_transit") {
-    return { label: t("driver.action.complete"), hint: t("driver.action.completeReturnHint") };
-  }
-  const labelKey = `driver.action.${action}` as MessageKey;
-  const hintKey = `driver.action.${action}Hint` as MessageKey;
-  return { label: t(labelKey), hint: t(hintKey) };
-}
-
 /**
  * Driver trip detail — road-first:
- * When → next stop → passengers + call → map → route (collapsed) → one big CTA
+ * When → next stop → passengers + call → map → Accept / Start / End CTA
  */
 export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
   const { t } = useI18n();
@@ -88,10 +64,10 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
 
   const request = trip.vehicle_requests;
   const points = (request?.request_route_points ?? []).slice().sort((a, b) => a.sequence - b.sequence);
-  const hasStops = points.some((p) => p.point_type === "stop");
-  const actions = nextDriverActions(trip.status, hasStops, request?.is_round_trip ?? false);
+  const hasRoute = points.some((p) => p.name?.trim());
   const focusIdx = trackFocusIndex(trip.status, points, trip.current_stop_index ?? 0);
   const nextStop = points[focusIdx] ?? points[0];
+  const cta = simplifiedDriverCta(trip.status);
   const isActive = !["completed", "cancelled", "breakdown"].includes(trip.status);
   const plate = trip.vehicles?.registration_number ?? trip.vehicles?.name;
   const paxCount = request?.passenger_count;
@@ -111,11 +87,23 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
         : [];
 
   const callTargets = passengers.filter((p) => !!p.phone?.trim());
-  const primaryAction = actions.find((a) => a.primary) ?? actions[0];
-  const secondaryActions = actions.filter((a) => a !== primaryAction);
-  const primaryCopy = primaryAction
-    ? actionCopy(t, primaryAction.action, trip.status, hasStops)
-    : null;
+
+  const ctaLabel =
+    cta?.kind === "accept"
+      ? t("driver.action.accept")
+      : cta?.kind === "start"
+        ? t("driver.action.startRide")
+        : cta?.kind === "end"
+          ? t("driver.action.endRide")
+          : "";
+  const ctaHint =
+    cta?.kind === "accept"
+      ? t("driver.action.acceptHint")
+      : cta?.kind === "start"
+        ? t("driver.action.startRideHint")
+        : cta?.kind === "end"
+          ? t("driver.action.endRideHint")
+          : "";
 
   function handlePosition(pos: LatLng) {
     lastPos.current = pos;
@@ -125,13 +113,14 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
     ping.mutate({ tripId: trip.id, latitude: pos[0], longitude: pos[1] });
   }
 
-  function runAction(action: string, label: string) {
+  function runCta() {
+    if (!cta) return;
     const pos = lastPos.current;
     const payload = pos ? { latitude: pos[0], longitude: pos[1] } : undefined;
     advance.mutate(
-      payload ? { tripId: trip.id, action, payload } : { tripId: trip.id, action },
+      payload ? { tripId: trip.id, action: cta.action, payload } : { tripId: trip.id, action: cta.action },
       {
-        onSuccess: () => toast.success(label),
+        onSuccess: () => toast.success(ctaLabel),
         onError: (e) => toast.error(e.message),
       },
     );
@@ -153,7 +142,7 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
       )}
     >
       <header className="plan-ride__top">
-        <Link to="/my-trips" className="plan-ride__back" aria-label={t("driver.detail.back")}>
+        <Link to="/dashboard" className="plan-ride__back" aria-label={t("driver.detail.back")}>
           <ArrowLeft className="size-5" />
         </Link>
         <h1 className="plan-ride__title">{t("driver.detail.assignment")}</h1>
@@ -167,13 +156,25 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
 
       {request?.pickup_at ? <WhenBanner at={request.pickup_at} className="driver-trip__when" /> : null}
 
+      {hasRoute ? (
+        <div className="driver-trip__where">
+          <RouteFlow points={points} {...(isActive ? { focusIndex: focusIdx } : {})} />
+        </div>
+      ) : null}
+
       {nextStop && isActive ? (
         <section className="driver-trip__next" aria-label="Next stop">
           <div className="driver-trip__next-icon" aria-hidden>
             <Navigation className="size-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="driver-trip__next-label">Next stop</p>
+            <p className="driver-trip__next-label">
+              {nextStop.point_type === "destination"
+                ? "Final drop"
+                : nextStop.point_type === "pickup"
+                  ? "Pickup"
+                  : "Next stop"}
+            </p>
             <p className="driver-trip__next-name">{nextStop.name}</p>
             {nextStop.address ? <p className="driver-trip__next-addr">{nextStop.address}</p> : null}
             {nextStop.expected_at ? (
@@ -226,36 +227,9 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
             </section>
           ) : null}
 
-          {points.length > 0 ? (
-            <details className="driver-trip__route">
-              <summary className="driver-trip__route-sum">
-                Full route · {points.length} stops
-              </summary>
-              <div className="plan-ride__route">
-                {points.map((p, i) => (
-                  <div
-                    key={`${p.point_type}-${i}`}
-                    className={cn("plan-ride__stop", i === focusIdx && "plan-ride__stop--focus")}
-                  >
-                    <span className={cn("plan-ride__dot", `plan-ride__dot--${pointTone(p.point_type)}`)} />
-                    <span className="min-w-0 flex-1">
-                      <span className="plan-ride__stop-name">
-                        {p.name}
-                        {i === focusIdx && isActive ? (
-                          <span className="plan-ride__stop-now"> · now</span>
-                        ) : null}
-                      </span>
-                      {p.address ? <span className="plan-ride__stop-addr">{p.address}</span> : null}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </details>
-          ) : null}
-
-          {[plate, paxCount != null ? `${paxCount} pax` : null, request?.purpose].some(Boolean) ? (
+          {[plate, paxCount != null ? passengerLabel(paxCount) : null].some(Boolean) ? (
             <p className="driver-trip__meta">
-              {[plate, paxCount != null ? `${paxCount} pax` : null, request?.purpose]
+              {[plate, paxCount != null ? passengerLabel(paxCount) : null]
                 .filter(Boolean)
                 .join(" · ")}
             </p>
@@ -281,38 +255,22 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
 
       {isActive ? (
         <div className="ride-detail__driver-actions driver-trip__actions">
-          {primaryAction && primaryCopy ? (
+          {cta ? (
             <Button
-              variant="default"
-              className="ride-detail__action-btn ride-detail__action-btn--primary driver-trip__cta"
+              variant={cta.kind === "end" ? "destructive" : "default"}
+              className={cn(
+                "ride-detail__action-btn ride-detail__action-btn--primary driver-trip__cta",
+                cta.kind === "end" && "driver-trip__cta--end",
+              )}
               disabled={advance.isPending}
-              tooltip={primaryCopy.hint}
-              onClick={() => runAction(primaryAction.action, primaryCopy.label)}
+              tooltip={ctaHint}
+              onClick={runCta}
             >
-              {primaryCopy.label}
+              {advance.isPending ? "…" : ctaLabel}
             </Button>
           ) : (
             <p className="ride-detail__muted">{t("driver.panel.noActions")}</p>
           )}
-          {secondaryActions.length > 0 ? (
-            <div className="driver-trip__secondary">
-              {secondaryActions.map((a) => {
-                const copy = actionCopy(t, a.action, trip.status, hasStops);
-                return (
-                  <Button
-                    key={a.action}
-                    variant="outline"
-                    className="ride-detail__action-btn"
-                    disabled={advance.isPending}
-                    tooltip={copy.hint}
-                    onClick={() => runAction(a.action, copy.label)}
-                  >
-                    {copy.label}
-                  </Button>
-                );
-              })}
-            </div>
-          ) : null}
         </div>
       ) : null}
     </div>

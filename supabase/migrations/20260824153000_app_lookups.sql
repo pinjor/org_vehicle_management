@@ -49,34 +49,34 @@ on conflict (key) do nothing;
 -- request_status
 insert into public.app_lookup_values (group_key, value_key, label, tone, sort_order) values
   ('request_status', 'draft', 'Draft', 'neutral', 1),
-  ('request_status', 'submitted', 'Awaiting review', 'warning', 2),
-  ('request_status', 'under_review', 'Under review', 'warning', 3),
+  ('request_status', 'submitted', 'Pending', 'warning', 2),
+  ('request_status', 'under_review', 'Pending', 'warning', 3),
   ('request_status', 'approved', 'Approved', 'info', 4),
   ('request_status', 'rejected', 'Rejected', 'danger', 5),
   ('request_status', 'assigned', 'Assigned', 'primary', 6),
-  ('request_status', 'in_progress', 'In progress', 'success', 7),
-  ('request_status', 'completed', 'Completed', 'neutral', 8),
+  ('request_status', 'in_progress', 'Active', 'success', 7),
+  ('request_status', 'completed', 'Done', 'neutral', 8),
   ('request_status', 'cancelled', 'Cancelled', 'danger', 9)
 on conflict (group_key, value_key) do nothing;
 
 -- trip_status
 insert into public.app_lookup_values (group_key, value_key, label, tone, sort_order) values
-  ('trip_status', 'driver_assigned', 'Driver assigned', 'primary', 1),
-  ('trip_status', 'driver_confirmed', 'Driver confirmed', 'primary', 2),
-  ('trip_status', 'heading_to_pickup', 'Heading to pickup', 'info', 3),
-  ('trip_status', 'arrived_pickup', 'Arrived at pickup', 'info', 4),
-  ('trip_status', 'passenger_picked_up', 'Passenger on board', 'success', 5),
-  ('trip_status', 'in_transit', 'In transit', 'success', 6),
-  ('trip_status', 'stop_reached', 'Stop reached', 'info', 7),
-  ('trip_status', 'destination_reached', 'At destination', 'info', 8),
-  ('trip_status', 'passenger_dropped', 'Passenger dropped', 'success', 9),
-  ('trip_status', 'return_pending', 'Return pending', 'warning', 10),
-  ('trip_status', 'return_in_transit', 'Return journey', 'success', 11),
-  ('trip_status', 'completed', 'Completed', 'neutral', 12),
+  ('trip_status', 'driver_assigned', 'Assigned', 'primary', 1),
+  ('trip_status', 'driver_confirmed', 'Confirmed', 'primary', 2),
+  ('trip_status', 'heading_to_pickup', 'To pickup', 'info', 3),
+  ('trip_status', 'arrived_pickup', 'At pickup', 'info', 4),
+  ('trip_status', 'passenger_picked_up', 'On board', 'success', 5),
+  ('trip_status', 'in_transit', 'On way', 'success', 6),
+  ('trip_status', 'stop_reached', 'At stop', 'info', 7),
+  ('trip_status', 'destination_reached', 'At drop', 'info', 8),
+  ('trip_status', 'passenger_dropped', 'Dropped', 'success', 9),
+  ('trip_status', 'return_pending', 'Return soon', 'warning', 10),
+  ('trip_status', 'return_in_transit', 'Returning', 'success', 11),
+  ('trip_status', 'completed', 'Done', 'neutral', 12),
   ('trip_status', 'cancelled', 'Cancelled', 'danger', 13),
   ('trip_status', 'no_show', 'No show', 'danger', 14),
   ('trip_status', 'breakdown', 'Breakdown', 'danger', 15),
-  ('trip_status', 'emergency_stop', 'Emergency stop', 'danger', 16)
+  ('trip_status', 'emergency_stop', 'Emergency', 'danger', 16)
 on conflict (group_key, value_key) do nothing;
 
 -- vehicle_status

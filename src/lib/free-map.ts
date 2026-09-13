@@ -12,70 +12,65 @@ import type { LatLng } from "@/lib/osm";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 /**
- * Inline raster styles only — no remote style URL.
+ * Stable no-key basemap — do not change without verifying tiles load in-browser.
  *
- * Important: every URL in `tiles` is a load-balanced mirror of the SAME scheme.
- * Mixing providers (e.g. OSM.fr + OSM.de) causes checkerboard empty boxes when
- * one host fails or rate-limits.
+ * Rules:
+ * - Inline raster style only (no remote style URL).
+ * - One host family per style (never mix OSM.fr + OSM.de etc.).
+ * - Never use CARTO basemaps.cartocdn.com (watermarks "API KEY REQUIRED").
+ * - Never use tile.openstreetmap.org (blocks non-browser / heavy use).
  *
- * Primary: Carto Voyager (solid at all zooms, free for reasonable use).
- * Fallback style: OSM.fr only (same-family a/b/c mirrors).
+ * Primary: OSM.fr. Fallback: Esri World Street Map (maxzoom 16).
  */
-export const FREE_MAP_STYLE: StyleSpecification = {
-  version: 8,
-  name: "FleetOps streets",
-  sources: {
-    streets: {
-      type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
-        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      attribution: "© OpenStreetMap · © CARTO",
-      minzoom: 0,
-      maxzoom: 20,
+function rasterStyle(
+  name: string,
+  tiles: string[],
+  attribution: string,
+  maxzoom: number,
+): StyleSpecification {
+  return {
+    version: 8,
+    name,
+    sources: {
+      streets: {
+        type: "raster",
+        tiles,
+        tileSize: 256,
+        attribution,
+        minzoom: 0,
+        maxzoom,
+      },
     },
-  },
-  layers: [
-    {
-      id: "background",
-      type: "background",
-      paint: { "background-color": "#dce6ef" },
-    },
-    { id: "streets", type: "raster", source: "streets" },
-  ],
-};
+    layers: [
+      {
+        id: "background",
+        type: "background",
+        paint: { "background-color": "#dce6ef" },
+      },
+      { id: "streets", type: "raster", source: "streets" },
+    ],
+  };
+}
 
-/** Fallback if Carto fails — single OSM.fr family only (no mixed hosts). */
-export const FREE_MAP_STYLE_OSM: StyleSpecification = {
-  version: 8,
-  name: "FleetOps OSM.fr",
-  sources: {
-    streets: {
-      type: "raster",
-      tiles: [
-        "https://a.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
-        "https://b.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
-        "https://c.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      attribution: "© OpenStreetMap",
-      minzoom: 0,
-      maxzoom: 18,
-    },
-  },
-  layers: [
-    {
-      id: "background",
-      type: "background",
-      paint: { "background-color": "#dce6ef" },
-    },
-    { id: "streets", type: "raster", source: "streets" },
+export const FREE_MAP_STYLE: StyleSpecification = rasterStyle(
+  "FleetOps OSM.fr",
+  [
+    "https://a.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
+    "https://b.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
+    "https://c.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
   ],
-};
+  "© OpenStreetMap",
+  18,
+);
+
+const FREE_MAP_STYLE_ESRI: StyleSpecification = rasterStyle(
+  "FleetOps Esri",
+  [
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+  ],
+  "© Esri · © OpenStreetMap",
+  16,
+);
 
 export const DHAKA_CENTER: [number, number] = [90.4125, 23.8103]; // lng, lat
 
@@ -100,7 +95,6 @@ export function lineFeature(path: LatLng[]) {
 export function fitLatLngs(map: MapLibreMap, points: LatLng[], padding = 56, maxZoom = 15) {
   if (!points.length) return;
   if (points.length === 1) {
-    // Stay under Esri/OSM native caps — higher zoom triggers "Map data not yet available" tiles
     map.easeTo({ center: toLngLat(points[0]!), zoom: Math.min(15, maxZoom) });
     return;
   }
@@ -170,22 +164,31 @@ export function upsertRouteLine(
   });
 }
 
-/** Fire when style is usable (MapLibre 6: prefer style.load). */
+/** Fire when style is usable. Prefer style.load; do not race with a short timeout. */
 export function whenStyleReady(map: MapLibreMap, cb: () => void) {
   let done = false;
   const fire = () => {
     if (done) return;
+    if (!map.isStyleLoaded()) return;
     done = true;
     cb();
   };
   if (map.isStyleLoaded()) {
     fire();
-    return () => {};
+    return () => {
+      done = true;
+    };
   }
-  map.once("load", fire);
-  map.once("style.load", fire);
-  // Safety if events missed
-  const t = window.setTimeout(fire, 1200);
+  map.on("load", fire);
+  map.on("style.load", fire);
+  // Last resort only — remote/network stalls
+  const t = window.setTimeout(() => {
+    if (!done && map.isStyleLoaded()) fire();
+    else if (!done) {
+      done = true;
+      cb();
+    }
+  }, 4000);
   return () => {
     done = true;
     window.clearTimeout(t);
@@ -226,17 +229,23 @@ export function mountMap(
   map.addControl(new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }), "top-right");
 
   let fellBack = false;
+  let tileErrors = 0;
   map.on("error", (e) => {
-    const msg = String((e as { error?: { message?: string } }).error?.message ?? "");
-    // Carto tile fail → OSM.fr family
     if (fellBack) return;
-    if (/tile|ajax|failed|403|404|carto|basemaps/i.test(msg)) {
-      fellBack = true;
-      try {
-        map.setStyle(FREE_MAP_STYLE_OSM);
-      } catch {
-        /* ignore */
-      }
+    const err = (e as { error?: { message?: string; status?: number } }).error;
+    const msg = String(err?.message ?? "");
+    // Only fall back on real tile HTTP failures — not every MapLibre "style" noise
+    const tileFail =
+      /Failed to fetch|AJAXError|status (403|404|500|502|503)/i.test(msg) ||
+      (typeof err?.status === "number" && err.status >= 400);
+    if (!tileFail) return;
+    tileErrors += 1;
+    if (tileErrors < 3) return;
+    fellBack = true;
+    try {
+      map.setStyle(FREE_MAP_STYLE_ESRI);
+    } catch {
+      /* ignore */
     }
   });
 

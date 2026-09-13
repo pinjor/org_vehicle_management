@@ -680,6 +680,11 @@ export function useAdminEmployee(profileId: string) {
           status: string;
           pickup_at: string;
           passenger_count: number;
+          request_route_points?: {
+            name: string;
+            point_type: string;
+            sequence?: number;
+          }[];
           vehicles?: { name?: string; registration_number?: string } | null;
           drivers?: { full_name?: string; phone?: string } | null;
         }[];

@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AssignmentPanel } from "@/components/assignment-panel";
 import { LiveTripMap } from "@/components/live-trip-map";
-import { WhenBanner, WhenStamp } from "@/components/info-blocks";
+import { WhenBanner, WhenStamp, RouteFlow } from "@/components/info-blocks";
 import { LookupChip } from "@/components/lookup-chip";
-import { OsmRouteMap } from "@/components/osm-route-map";
 import { AppShell } from "@/components/app-shell";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { EmptyState } from "@/components/fleet-ui";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+import { passengerLabel } from "@/lib/fleet";
 import { useLookupEntry } from "@/lib/lookups-context";
 import { formatBdPhone } from "@/lib/phone";
 import type { LatLng } from "@/lib/osm";
@@ -22,9 +22,7 @@ import {
   useTripHistory,
   useTripLocation,
 } from "@/lib/queries";
-import { cn } from "@/lib/utils";
 import {
-  pointTone,
   trackFocusIndex,
   type RoutePoint,
   type TripLike,
@@ -121,29 +119,17 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
   ).slice(0, 6);
 
   const mapEl =
-    mapPoints.length > 0 ? (
-      tripLive ? (
-        <LiveTripMap
-          mapOnly
-          className="ride-detail__map-el ride-detail__map-el--admin"
-          points={mapPoints}
-          focusIndex={focusIdx}
-          externalPosition={externalPos}
-          trail={trail}
-          markerLabel={request.drivers?.full_name ?? "Driver"}
-        />
-      ) : (
-        <OsmRouteMap
-          framed={false}
-          showSummary={false}
-          className="ride-detail__map-el ride-detail__map-el--admin"
-          points={mapPoints}
-          focusIndex={focusIdx}
-        />
-      )
-    ) : (
-      <p className="ride-detail__muted admin-req__map-empty">No coordinates to plot.</p>
-    );
+    tripLive && mapPoints.length > 0 ? (
+      <LiveTripMap
+        mapOnly
+        className="ride-detail__map-el ride-detail__map-el--admin"
+        points={mapPoints}
+        focusIndex={focusIdx}
+        externalPosition={externalPos}
+        trail={trail}
+        markerLabel={request.drivers?.full_name ?? "Driver"}
+      />
+    ) : null;
 
   return (
     <AppShell
@@ -157,7 +143,7 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
         <div className="admin-req__status">
           <div className="admin-req__chips">
             <LookupChip group="request_status" value={request.status} pill />
-            <span className="admin-req__pill">{request.passenger_count} pax</span>
+            <span className="admin-req__pill">{passengerLabel(request.passenger_count)}</span>
             <span className="admin-req__pill">{tripType.label}</span>
           </div>
           {canDecide && user ? (
@@ -221,34 +207,14 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
 
             <section className="admin-req__route" aria-label="Route">
               <p className="admin-req__section-label">Route</p>
-              <div className="plan-ride__route">
-                {mapPoints.length === 0 ? (
-                  <p className="ride-detail__muted p-3">No route points.</p>
-                ) : (
-                  mapPoints.map((p, i) => (
-                    <div
-                      key={`${p.point_type}-${i}`}
-                      className={cn(
-                        "plan-ride__stop",
-                        tripLive && i === focusIdx && "plan-ride__stop--focus",
-                      )}
-                    >
-                      <span
-                        className={cn("plan-ride__dot", `plan-ride__dot--${pointTone(p.point_type)}`)}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="plan-ride__stop-name">
-                          {p.name}
-                          {tripLive && i === focusIdx ? (
-                            <span className="plan-ride__stop-now"> · now</span>
-                          ) : null}
-                        </span>
-                        {p.address ? <span className="plan-ride__stop-addr">{p.address}</span> : null}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
+              {mapPoints.length === 0 ? (
+                <p className="ride-detail__muted">No route points.</p>
+              ) : (
+                <RouteFlow
+                  points={mapPoints}
+                  {...(tripLive ? { focusIndex: focusIdx } : {})}
+                />
+              )}
             </section>
 
             {(request.purpose || request.special_requirements) && (
@@ -265,12 +231,10 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
               </div>
             )}
 
-            {!deskLayout ? (
-              <div className="admin-req__map-mobile" aria-label={tripLive ? "Live map" : "Route map"}>
+            {!deskLayout && mapEl ? (
+              <div className="admin-req__map-mobile" aria-label="Live map">
                 <section className="admin-req__map-card">
-                  <p className="admin-req__section-label admin-req__map-label">
-                    {tripLive ? "Live map" : "Route map"}
-                  </p>
+                  <p className="admin-req__section-label admin-req__map-label">Live map</p>
                   {mapEl}
                 </section>
               </div>
@@ -426,14 +390,14 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
             </details>
           </div>
 
-          {deskLayout ? (
-            <aside className="admin-req__aside" aria-label={tripLive ? "Live map" : "Route map"}>
+          {deskLayout && mapEl ? (
+            <aside className="admin-req__aside" aria-label="Live map">
               <section className="admin-req__map-card">
                 <div className="admin-req__map-head">
                   <p className="admin-req__section-label" style={{ padding: 0, margin: 0 }}>
-                    {tripLive ? "Live map" : "Route map"}
+                    Live map
                   </p>
-                  {tripLive && request.drivers?.full_name ? (
+                  {request.drivers?.full_name ? (
                     <span className="admin-req__map-sub">{request.drivers.full_name}</span>
                   ) : null}
                 </div>

@@ -246,6 +246,16 @@ begin
       case when t.status = 'return_pending' then 'return_in_transit' end
     when 'complete' then
       case when t.status in ('passenger_dropped', 'return_in_transit', 'destination_reached') then 'completed' end
+    -- Simplified driver CTAs (dashboard): Accept → Start ride → End ride
+    when 'start_ride' then
+      case when t.status in (
+        'driver_confirmed', 'heading_to_pickup', 'arrived_pickup', 'passenger_picked_up'
+      ) then 'in_transit' end
+    when 'end_ride' then
+      case when t.status in (
+        'in_transit', 'stop_reached', 'destination_reached', 'passenger_dropped',
+        'return_pending', 'return_in_transit'
+      ) then 'completed' end
     when 'breakdown' then
       case when t.status not in ('completed', 'cancelled') then 'breakdown' end
     when 'cancel' then
@@ -265,9 +275,18 @@ begin
       else t.current_stop_index
     end,
     current_leg = case when nxt = 'return_in_transit' then 'return' else t.current_leg end,
-    started_at = coalesce(t.started_at, case when nxt = 'heading_to_pickup' then now() end),
+    started_at = coalesce(
+      t.started_at,
+      case when nxt in ('heading_to_pickup', 'in_transit') and _action in ('head_to_pickup', 'start_ride') then now() end
+    ),
     arrived_pickup_at = coalesce(t.arrived_pickup_at, case when nxt = 'arrived_pickup' then now() end),
-    picked_up_at = coalesce(t.picked_up_at, case when nxt = 'passenger_picked_up' then now() end),
+    picked_up_at = coalesce(
+      t.picked_up_at,
+      case
+        when nxt = 'passenger_picked_up' then now()
+        when _action = 'start_ride' and nxt = 'in_transit' then now()
+      end
+    ),
     completed_at = case when nxt = 'completed' then now() else t.completed_at end,
     odometer_start = coalesce((_payload->>'odometer_start')::int, t.odometer_start),
     odometer_end = coalesce((_payload->>'odometer_end')::int, t.odometer_end),
@@ -336,6 +355,11 @@ begin
     update public.vehicle_requests set status = 'in_progress' where id = r.id and status <> 'in_progress';
     update public.vehicles set operational_status = 'on_trip' where id = t.vehicle_id;
     update public.drivers set current_status = 'driving' where id = t.driver_id;
+    if _action = 'start_ride' then
+      insert into public.notifications (user_id, category, title, body, link)
+      select r.requester_id, 'trip', 'Ride started', 'Your trip is under way.', '/requests/' || r.id
+      where r.requester_id is not null;
+    end if;
   end if;
 
   insert into public.audit_logs (entity_type, entity_id, action, old_value, new_value, actor_id)
@@ -388,6 +412,30 @@ where (group_key, value_key) in (
   ('trip_status', 'emergency_stop'),
   ('unavailability_status', 'info_requested')
 );
+
+-- Plain status labels (chips / tags)
+update public.app_lookup_values set label = v.label
+from (values
+  ('request_status', 'submitted', 'Pending'),
+  ('request_status', 'under_review', 'Pending'),
+  ('request_status', 'in_progress', 'Active'),
+  ('request_status', 'completed', 'Done'),
+  ('trip_status', 'driver_assigned', 'Assigned'),
+  ('trip_status', 'driver_confirmed', 'Confirmed'),
+  ('trip_status', 'heading_to_pickup', 'To pickup'),
+  ('trip_status', 'arrived_pickup', 'At pickup'),
+  ('trip_status', 'passenger_picked_up', 'On board'),
+  ('trip_status', 'in_transit', 'On way'),
+  ('trip_status', 'stop_reached', 'At stop'),
+  ('trip_status', 'destination_reached', 'At drop'),
+  ('trip_status', 'passenger_dropped', 'Dropped'),
+  ('trip_status', 'return_pending', 'Return soon'),
+  ('trip_status', 'return_in_transit', 'Returning'),
+  ('trip_status', 'completed', 'Done'),
+  ('trip_status', 'emergency_stop', 'Emergency')
+) as v(group_key, value_key, label)
+where app_lookup_values.group_key = v.group_key
+  and app_lookup_values.value_key = v.value_key;
 
 -- Keep driver categories in sync with primary vehicle
 update public.drivers d
