@@ -16,14 +16,13 @@ import { useAuth } from "@/lib/auth";
 import { relativeTime, passengerLabel } from "@/lib/fleet";
 import { formatBdPhone } from "@/lib/phone";
 import type { RequestRow } from "@/lib/queries";
-import { useDecideRequest, useRequests } from "@/lib/queries";
+import { useRequests } from "@/lib/queries";
 import { routeLineCompact } from "@/lib/route-summary";
 
 /** Toast + modal when new employee requests arrive (admin/dispatcher only). */
 export function AdminRequestAlert() {
   const { isDispatcher, user } = useAuth();
   const { data } = useRequests({ status: ["submitted"] });
-  const decide = useDecideRequest();
   const seen = useRef<Set<string>>(new Set());
   const initialized = useRef(false);
   const [popup, setPopup] = useState<RequestRow | null>(null);
@@ -113,48 +112,11 @@ export function AdminRequestAlert() {
                   setPopup(null);
                 }}
               />
-              {popup.status === "submitted" ? (
-                <div className="admin-pending__row">
-                  <Button
-                    disabled={decide.isPending}
-                    className="flex-1"
-                    tooltip="Approve request"
-                    onClick={() => {
-                      void decide
-                        .mutateAsync({ requestId: popup.id, approve: true, actorId: user.id })
-                        .then(() => toast.success("Request approved"))
-                        .catch((e: Error) => toast.error(e.message));
-                    }}
-                  >
-                    Approve
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={decide.isPending}
-                    className="btn-reject flex-1"
-                    tooltip="Reject request"
-                    onClick={() => {
-                      void decide
-                        .mutateAsync({ requestId: popup.id, approve: false, actorId: user.id })
-                        .then(() => {
-                          toast.success("Request rejected");
-                          setPopup(null);
-                        })
-                        .catch((e: Error) => toast.error(e.message));
-                    }}
-                  >
-                    Reject
-                  </Button>
-                </div>
-              ) : null}
             </div>
           ) : null}
         </div>
 
         <DialogFooter className="shrink-0 flex-col gap-2 sm:flex-col">
-          <Button variant="outline" asChild className="w-full" tooltip="Open dispatch board">
-            <Link to="/dispatch">Dispatch board</Link>
-          </Button>
           <Button variant="ghost" asChild className="w-full" tooltip="Full request details">
             <Link to="/requests/$requestId" params={{ requestId: popup.id }}>
               Details

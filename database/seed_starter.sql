@@ -52,7 +52,7 @@ from (values
   ('Dhaka Metro-Cha-51-0091', 'FL-010', 'Toyota Hiace GL', 'microbus', 'Toyota', 'Hiace', 2022, 'White', 12, 6, 'diesel', 'manual', true, false, 'owned', 'Head Office', 23.7815, 90.4155, 58900, 2100, 150, 200, 'available'),
   ('Dhaka Metro-Cha-51-0092', 'FL-011', 'Toyota Hiace Super GL', 'microbus', 'Toyota', 'Hiace', 2023, 'White', 12, 6, 'diesel', 'manual', true, false, 'owned', 'Head Office', 23.7822, 90.4001, 27400, 1100, 190, 250, 'available'),
   ('Dhaka Metro-Ja-31-1198', 'FL-016', 'Ashok Leyland Staff Bus', 'minibus', 'Ashok Leyland', 'Falcon', 2018, 'Blue', 30, 10, 'diesel', 'manual', true, false, 'owned', 'Gazipur', 23.9945, 90.3735, 214000, 15200, -60, 55, 'available'),
-  ('Dhaka Metro-Na-19-2265', 'FL-020', 'Toyota Hilux', 'pickup', 'Toyota', 'Hilux', 2021, 'Silver', 4, 8, 'diesel', 'manual', false, false, 'owned', 'Tejgaon', 23.7655, 90.3985, 79800, 4400, 80, 135, 'available'),
+  ('Dhaka Metro-Na-19-2265', 'FL-020', 'Toyota Hilux', 'pickup', 'Toyota', 'Hilux', 2021, 'Silver', 4, 8, 'diesel', 'manual', false, false, 'owned', 'Tejgaon', 23.7655, 90.3985, 79800, 4400, 80, 135, 'under_maintenance'),
   ('Dhaka Metro-Ta-14-8834', 'FL-022', 'Toyota Ambulance', 'ambulance', 'Toyota', 'Hiace Ambulance', 2021, 'White', 6, 3, 'diesel', 'manual', true, false, 'owned', 'Head Office', 23.8030, 90.4155, 37200, 1600, 165, 215, 'available')
 ) as r(reg, fleet, nm, cat, brand, model, yr, col, seats, lug, fuel, trans, ac, vip, own, branch, lat, lng, odo, since_service, doc1, doc2, status)
 where not exists (select 1 from public.vehicles v where v.fleet_number = r.fleet);

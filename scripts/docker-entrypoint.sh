@@ -46,6 +46,11 @@ if [ "${INIT_DB:-true}" = "true" ]; then
     echo "Ensuring demo sign-in accounts…"
     "${PSQL[@]}" -f /app/database/seed_demo_accounts.sql
   fi
+
+  if [ -f /app/database/seed_maintenance.sql ]; then
+    echo "Ensuring demo maintenance reports…"
+    "${PSQL[@]}" -f /app/database/seed_maintenance.sql || true
+  fi
 fi
 
 echo "Starting Vehicle Management System on ${HOST:-0.0.0.0}:${PORT:-3000}…"

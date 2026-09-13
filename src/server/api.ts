@@ -1327,8 +1327,13 @@ app.get("/api/unavailability", async (c) => {
   requireUser(c);
   const { rows } = await query(`
     select u.*,
-      json_build_object('name', v.name, 'registration_number', v.registration_number) as vehicles,
-      json_build_object('full_name', d.full_name) as drivers
+      json_build_object(
+        'name', v.name,
+        'registration_number', v.registration_number,
+        'fleet_number', v.fleet_number,
+        'operational_status', v.operational_status
+      ) as vehicles,
+      json_build_object('full_name', d.full_name, 'phone', d.phone) as drivers
     from vehicle_unavailability_requests u
     left join vehicles v on v.id = u.vehicle_id
     left join drivers d on d.id = u.driver_id

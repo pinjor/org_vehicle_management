@@ -306,9 +306,15 @@ export type UnavailabilityRow = {
   reason: string;
   severity: string;
   description?: string | null;
+  admin_note?: string | null;
   created_at: string;
   vehicle_id: string;
-  vehicles?: { registration_number?: string; name?: string } | null;
+  vehicles?: {
+    registration_number?: string;
+    name?: string;
+    fleet_number?: string;
+    operational_status?: string;
+  } | null;
   drivers?: { full_name?: string; phone?: string } | null;
 };
 
