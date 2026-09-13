@@ -5,12 +5,17 @@ on:
     branches:
       - main
 
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: true
+
 jobs:
   deploy:
+    name: Deploy to Oracle Staging
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy
+      - name: Deploy Application
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.STAGE_HOST }}
@@ -19,13 +24,36 @@ jobs:
           script: |
             set -e
 
+            echo "===================================="
+            echo "Updating source code..."
+            echo "===================================="
+
             cd /var/www/vms/frontend
+
             git fetch origin
             git reset --hard origin/main
+            git clean -fd
+
+            echo "===================================="
+            echo "Building application..."
+            echo "===================================="
 
             cd /var/www/vms
 
-            docker compose pull || true
             docker compose up -d --build
 
+            echo "===================================="
+            echo "Checking container status..."
+            echo "===================================="
+
+            docker compose ps
+
+            echo "===================================="
+            echo "Cleanup old images..."
+            echo "===================================="
+
             docker image prune -af
+
+            echo "===================================="
+            echo "Deployment completed successfully"
+            echo "===================================="
