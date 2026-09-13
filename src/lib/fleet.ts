@@ -83,27 +83,17 @@ export const PRIORITY: Record<string, { label: string; tone: Tone }> = {
   vip: { label: "VIP", tone: "primary" },
 };
 
-/** Lower = handle first (emergency before normal). */
-const PRIORITY_RANK: Record<string, number> = {
-  emergency: 0,
-  vip: 1,
-  high: 2,
-  important: 3,
-  normal: 4,
-};
-
-/** Dispatch queue: priority → soonest pickup → oldest created. */
+/** Dispatch / pending queue: newest request first. */
 export function sortDispatchQueue<
   T extends { priority?: string; pickup_at?: string; created_at: string },
 >(rows: T[]): T[] {
   return [...rows].sort((a, b) => {
-    const pa = PRIORITY_RANK[a.priority ?? "normal"] ?? 9;
-    const pb = PRIORITY_RANK[b.priority ?? "normal"] ?? 9;
-    if (pa !== pb) return pa - pb;
+    const ca = new Date(a.created_at).getTime();
+    const cb = new Date(b.created_at).getTime();
+    if (cb !== ca) return cb - ca;
     const ta = new Date(a.pickup_at ?? a.created_at).getTime();
     const tb = new Date(b.pickup_at ?? b.created_at).getTime();
-    if (ta !== tb) return ta - tb;
-    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    return tb - ta;
   });
 }
 
