@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { ClipboardList, FileWarning, Wrench } from "lucide-react";
+import { ClipboardList, FileWarning, Plus, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { WhenRail } from "@/components/info-blocks";
+import { ReportVehicleIssueDialog } from "@/components/report-vehicle-issue-dialog";
 import { ChipGroup, EmptyState, KpiCard, KpiGrid, MetaChip, Panel, StatusChip } from "@/components/fleet-ui";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,6 +36,7 @@ function MaintenancePage() {
   const review = useReviewUnavailability();
   const { user, isDispatcher } = useAuth();
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [logOpen, setLogOpen] = useState(false);
 
   const decisionHints: Record<string, string> = {
     sent_to_maintenance: "Send to shop",
@@ -48,7 +50,19 @@ function MaintenancePage() {
   const inMaintenance = (vehicles.data ?? []).filter((v) => v.operational_status === "under_maintenance");
 
   return (
-    <AppShell title="Maintenance" subtitle="Vehicle reports">
+    <AppShell
+      title="Maintenance"
+      subtitle="Fleet vehicle downtime"
+      {...(isDispatcher
+        ? {
+            actions: (
+              <Button size="sm" onClick={() => setLogOpen(true)} tooltip="Log a fleet vehicle issue">
+                <Plus className="size-4" /> Log issue
+              </Button>
+            ),
+          }
+        : {})}
+    >
       <div className="page-stack">
         <KpiGrid className="sm:grid-cols-3">
           <KpiCard label="Pending" value={pending.length} tone="warning" icon={<FileWarning />} />
@@ -118,7 +132,7 @@ function MaintenancePage() {
         <Panel tone="warning" title="Reports" bodyClassName="p-0">
           {rows.length === 0 ? (
             <div className="p-4">
-              <EmptyState title="No reports" description="Driver reports show here." />
+              <EmptyState title="No reports" description="Use Log issue to record fleet vehicle downtime." />
             </div>
           ) : (
             <ul className="divide-y divide-border/60">
@@ -264,6 +278,8 @@ function MaintenancePage() {
           )}
         </Panel>
       </div>
+
+      {isDispatcher ? <ReportVehicleIssueDialog open={logOpen} onOpenChange={setLogOpen} /> : null}
     </AppShell>
   );
 }

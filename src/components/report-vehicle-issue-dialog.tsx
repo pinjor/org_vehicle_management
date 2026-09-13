@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
-import { useReportVehicleIssue } from "@/lib/queries";
+import { useReportVehicleIssue, useVehicles, type VehicleRecord } from "@/lib/queries";
 
 const REASONS = [
   ["mechanical", "Mechanical"],
@@ -34,38 +34,48 @@ const SEVERITIES = [
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  vehicleId: string;
-  driverId?: string | null;
-  tripId?: string | null;
+  /** Prefill when logging from a known vehicle. */
+  vehicleId?: string;
   vehicleLabel?: string;
 };
 
-export function ReportVehicleIssueDialog({
-  open,
-  onOpenChange,
-  vehicleId,
-  driverId,
-  tripId,
-  vehicleLabel,
-}: Props) {
+function vehicleOptionLabel(v: VehicleRecord) {
+  return `${v.fleet_number} · ${v.registration_number} · ${v.name}`;
+}
+
+export function ReportVehicleIssueDialog({ open, onOpenChange, vehicleId, vehicleLabel }: Props) {
   const { user } = useAuth();
+  const vehicles = useVehicles();
   const report = useReportVehicleIssue();
+  const [pickedId, setPickedId] = useState(vehicleId ?? "");
   const [reason, setReason] = useState<(typeof REASONS)[number][0]>("mechanical");
   const [severity, setSeverity] = useState<(typeof SEVERITIES)[number][0]>("medium");
   const [description, setDescription] = useState("");
 
+  const fleetOptions = useMemo(() => {
+    const list = vehicles.data ?? [];
+    return [...list].sort((a, b) => a.fleet_number.localeCompare(b.fleet_number));
+  }, [vehicles.data]);
+
+  const effectiveVehicleId = vehicleId ?? pickedId;
+
   function submit() {
     if (!user) return;
+    if (!effectiveVehicleId) {
+      toast.error("Pick a vehicle");
+      return;
+    }
     const desc = description.trim();
     if (!desc) {
       toast.error("Describe the issue");
       return;
     }
+    const vehicle = fleetOptions.find((v) => v.id === effectiveVehicleId);
     report.mutate(
       {
-        vehicleId,
-        driverId: driverId ?? null,
-        tripId: tripId ?? null,
+        vehicleId: effectiveVehicleId,
+        driverId: vehicle?.primary_driver_id ?? null,
+        tripId: null,
         reason,
         description: desc,
         severity,
@@ -73,8 +83,9 @@ export function ReportVehicleIssueDialog({
       },
       {
         onSuccess: () => {
-          toast.success("Report sent to maintenance");
+          toast.success("Issue logged");
           setDescription("");
+          if (!vehicleId) setPickedId("");
           onOpenChange(false);
         },
         onError: (e) => toast.error(e.message),
@@ -83,17 +94,44 @@ export function ReportVehicleIssueDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          setDescription("");
+          if (!vehicleId) setPickedId("");
+        }
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Report vehicle issue</DialogTitle>
+          <DialogTitle>Log vehicle issue</DialogTitle>
           <DialogDescription>
             {vehicleLabel
-              ? `Tell dispatch about a problem with ${vehicleLabel}.`
-              : "Tell dispatch about a vehicle problem."}
+              ? `Record downtime for ${vehicleLabel}.`
+              : "Pick a fleet vehicle and log an issue for the workshop."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
+          {!vehicleId ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="issue-vehicle">Vehicle</Label>
+              <select
+                id="issue-vehicle"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={pickedId}
+                onChange={(e) => setPickedId(e.target.value)}
+              >
+                <option value="">Select vehicle…</option>
+                {fleetOptions.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {vehicleOptionLabel(v)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div className="space-y-1.5">
             <Label htmlFor="issue-reason">Reason</Label>
             <select
@@ -129,7 +167,7 @@ export function ReportVehicleIssueDialog({
             <Textarea
               id="issue-desc"
               rows={3}
-              placeholder="Short description for the workshop…"
+              placeholder="Short note for the workshop…"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
@@ -140,7 +178,7 @@ export function ReportVehicleIssueDialog({
             Cancel
           </Button>
           <Button disabled={report.isPending} onClick={submit}>
-            {report.isPending ? "Sending…" : "Send report"}
+            {report.isPending ? "Saving…" : "Log issue"}
           </Button>
         </DialogFooter>
       </DialogContent>

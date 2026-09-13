@@ -1344,6 +1344,7 @@ app.get("/api/unavailability", async (c) => {
 
 app.post("/api/unavailability", async (c) => {
   const user = requireUser(c);
+  if (!isDispatcher(user.roles)) throw new Error("Not authorised");
   const input = await c.req.json<Record<string, unknown>>();
   await query(
     `insert into vehicle_unavailability_requests (vehicle_id, driver_id, trip_id, reason, description, severity, created_by)
@@ -1353,7 +1354,7 @@ app.post("/api/unavailability", async (c) => {
   await query(
     `insert into notifications (audience_role, category, title, body, link)
      values ('transport_admin','maintenance','Vehicle unavailability requested',$1,'/maintenance')`,
-    [input.description || "A driver reported a vehicle issue awaiting approval."],
+    [input.description || "A vehicle issue was logged for maintenance review."],
   );
   return c.json({ ok: true });
 });

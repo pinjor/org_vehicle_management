@@ -1,14 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { useRef, useState } from "react";
-import { ArrowLeft, Navigation, Phone, Wrench } from "lucide-react";
+import { useRef } from "react";
+import { ArrowLeft, Navigation, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { LiveTripMap } from "@/components/live-trip-map";
-import { ReportVehicleIssueDialog } from "@/components/report-vehicle-issue-dialog";
 import { WhenBanner, WhenStamp, RouteFlow } from "@/components/info-blocks";
 import { LookupChip } from "@/components/lookup-chip";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
-import { useAuth } from "@/lib/auth";
 import { useAdvanceTrip, usePingTripLocation } from "@/lib/queries";
 import { passengerLabel, simplifiedDriverCta } from "@/lib/fleet";
 import { formatBdPhone } from "@/lib/phone";
@@ -60,12 +58,10 @@ type Pax = {
  */
 export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
   const { t } = useI18n();
-  const { user } = useAuth();
   const advance = useAdvanceTrip();
   const ping = usePingTripLocation();
   const lastPingAt = useRef(0);
   const lastPos = useRef<LatLng | null>(null);
-  const [reportOpen, setReportOpen] = useState(false);
 
   const request = trip.vehicle_requests;
   const points = (request?.request_route_points ?? []).slice().sort((a, b) => a.sequence - b.sequence);
@@ -260,17 +256,6 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
 
       {isActive ? (
         <div className="ride-detail__driver-actions driver-trip__actions">
-          {trip.vehicle_id ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="ride-detail__action-btn"
-              onClick={() => setReportOpen(true)}
-            >
-              <Wrench className="size-4" />
-              {t("driver.action.reportIssue")}
-            </Button>
-          ) : null}
           {cta ? (
             <Button
               variant={cta.kind === "end" ? "destructive" : "default"}
@@ -288,17 +273,6 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
             <p className="ride-detail__muted">{t("driver.panel.noActions")}</p>
           )}
         </div>
-      ) : null}
-
-      {trip.vehicle_id && user ? (
-        <ReportVehicleIssueDialog
-          open={reportOpen}
-          onOpenChange={setReportOpen}
-          vehicleId={trip.vehicle_id}
-          driverId={trip.driver_id ?? null}
-          tripId={trip.id}
-          {...(plate ? { vehicleLabel: plate } : {})}
-        />
       ) : null}
     </div>
   );
