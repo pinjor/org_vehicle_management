@@ -155,11 +155,6 @@ export function FleetHealthModule({
             total={total}
             tone="danger"
           />
-          <div className="dash-mod__chips">
-            <MetaChip label={`${available} free`} tone={available === 0 ? "warning" : "success"} />
-            <MetaChip label={`${maintenance} in shop`} tone={maintenance > 0 ? "warning" : "neutral"} />
-            <MetaChip label={`${unavailable} down`} tone={unavailable > 0 ? "danger" : "neutral"} />
-          </div>
         </div>
       )}
     </DashModule>
@@ -195,11 +190,6 @@ export function DriverStatusModule({
           <DashStatBar label={DRIVER_STATUS["available"]?.label ?? "Available"} value={available} total={total} tone="success" />
           <DashStatBar label={DRIVER_STATUS["driving"]?.label ?? "Driving"} value={driving} total={total} tone="info" />
           <DashStatBar label="Away / leave" value={away} total={total} tone="neutral" />
-          <div className="dash-mod__chips">
-            <MetaChip label={`${available} free`} tone={available === 0 ? "warning" : "success"} />
-            <MetaChip label={`${driving} on trip`} tone={driving > 0 ? "info" : "neutral"} />
-            <MetaChip label={`${away} away`} />
-          </div>
         </div>
       )}
     </DashModule>

@@ -208,7 +208,7 @@ function DispatcherDashboard() {
       sortDispatchQueue([...rows].filter((r) => ["submitted", "approved"].includes(r.status))),
     [rows],
   );
-  const preview = incoming.slice(0, 6);
+  const preview = incoming.slice(0, 4);
   const moreCount = Math.max(0, incoming.length - preview.length);
 
   const liveTrips = useMemo(
