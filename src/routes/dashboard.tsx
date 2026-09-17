@@ -1,22 +1,34 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Car, ClipboardList, Clock, Plus, Users, Navigation } from "lucide-react";
+import { CalendarClock, Car, Clock, Navigation, Users } from "lucide-react";
+import { toast } from "sonner";
 import { DriverHomeIllustration } from "@/components/employee-home-illustration";
 import { EmployeeRideHome } from "@/components/employee-ride-home";
 import { AppShell } from "@/components/app-shell";
-import { AdminRequestCard } from "@/components/list-cards";
 import { DriverTripPreview } from "@/components/driver-trip-preview";
+import { AdminRequestCard } from "@/components/list-cards";
 import { PanelSkeleton } from "@/components/loading-skeletons";
+import {
+  DualList,
+  RequestTableRow,
+  TripListTable,
+} from "@/components/trip-list-table";
 import {
   KpiCard,
   KpiGrid,
-  Panel,
   EmptyState,
 } from "@/components/fleet-ui";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { sortDispatchQueue } from "@/lib/fleet";
 import { useI18n } from "@/lib/i18n";
-import { useDriverTrips, useDrivers, useRequests, useVehicles } from "@/lib/queries";
+import {
+  useActiveTrips,
+  useDecideRequest,
+  useDriverTrips,
+  useDrivers,
+  useRequests,
+  useVehicles,
+} from "@/lib/queries";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -31,14 +43,21 @@ export const Route = createFileRoute("/dashboard")({
 function DashboardPage() {
   const { isDispatcher, isDriver, isEmployee, user, driverId } = useAuth();
 
-  if (isDriver && !isDispatcher) return <DriverDashboard driverId={driverId} userId={user?.id} />;
+  if (isDriver && !isDispatcher) {
+    return (
+      <DriverDashboard
+        driverId={driverId}
+        {...(user?.id ? { userId: user.id } : {})}
+      />
+    );
+  }
   if (isEmployee && !isDispatcher) return <EmployeeDashboard />;
   return <DispatcherDashboard />;
 }
 
 function EmployeeDashboard() {
   return (
-    <AppShell title="Vehicle Management System" subtitle="Book a vehicle">
+    <AppShell title="Ride" subtitle="Book a vehicle">
       <EmployeeRideHome />
     </AppShell>
   );
@@ -62,9 +81,9 @@ function DriverDashboard({ driverId, userId }: { driverId: string | null; userId
     );
   }
 
-  const trips = (data ?? []).filter((t) => !["completed", "cancelled"].includes(t.status));
+  const trips = (data ?? []).filter((t) => !["completed", "cancelled", "breakdown"].includes(t.status));
   const incoming = trips[0];
-  const queued = trips.slice(1);
+  const laterCount = Math.max(0, trips.length - 1);
 
   return (
     <AppShell
@@ -92,30 +111,22 @@ function DriverDashboard({ driverId, userId }: { driverId: string | null; userId
 
         {!isLoading && incoming && (
           <section className="space-y-2">
-            <p className="px-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {t("driver.home.incoming")}
-            </p>
-            <DriverTripPreview trip={incoming} emphasize showStatus={false} />
+            <div className="flex items-center justify-between gap-2 px-0.5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {t("driver.home.incoming")}
+              </p>
+              {laterCount > 0 ? (
+                <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                  <Link to="/my-trips">{t("driver.home.upNext", { count: laterCount })}</Link>
+                </Button>
+              ) : null}
+            </div>
+            <DriverTripPreview trip={incoming} emphasize />
           </section>
         )}
 
         {!isLoading && !incoming && (
           <p className="px-1 text-center text-xs text-muted-foreground">{t("driver.home.empty")}</p>
-        )}
-
-        {queued.length > 0 && (
-          <section className="space-y-2">
-            <p className="px-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {t("driver.home.upNext", { count: queued.length })}
-            </p>
-            <ul className="space-y-2">
-              {queued.map((trip) => (
-                <li key={trip.id}>
-                  <DriverTripPreview trip={trip} showStatus={false} />
-                </li>
-              ))}
-            </ul>
-          </section>
         )}
 
         <DriverHomeIllustration />
@@ -124,24 +135,33 @@ function DriverDashboard({ driverId, userId }: { driverId: string | null; userId
   );
 }
 
+/** KPIs + pending queue preview — full board on /trips. */
 function DispatcherDashboard() {
+  const { user } = useAuth();
   const requests = useRequests();
+  const trips = useActiveTrips();
   const vehicles = useVehicles();
   const drivers = useDrivers();
+  const decide = useDecideRequest();
 
   const rows = requests.data ?? [];
   const incoming = sortDispatchQueue(
     [...rows].filter((r) => ["submitted", "approved"].includes(r.status)),
   );
+  const preview = incoming.slice(0, 5);
+  const moreCount = Math.max(0, incoming.length - preview.length);
+  const liveCount = (trips.data ?? []).filter(
+    (t) => !["completed", "cancelled", "breakdown"].includes(t.status),
+  ).length;
 
   const availableVehicles = (vehicles.data ?? []).filter((v) => v.operational_status === "available");
   const availableDrivers = (drivers.data ?? []).filter((d) => d.current_status === "available");
 
   return (
-    <AppShell title="Home" subtitle="Review and assign">
+    <AppShell title="Home" subtitle="Ops overview">
       <div className="role-dashboard page-stack">
         <KpiGrid fit="auto">
-          <KpiCard label="Pending" value={incoming.length} hint="To handle" tone="warning" icon={<Clock />} />
+          <KpiCard label="Pending" value={incoming.length} hint="Need assign" tone="warning" icon={<Clock />} />
           <KpiCard
             label="Vehicles free"
             value={availableVehicles.length}
@@ -156,31 +176,87 @@ function DispatcherDashboard() {
             tone="primary"
             icon={<Users />}
           />
+          <KpiCard label="Live" value={liveCount} tone="info" icon={<CalendarClock />} />
         </KpiGrid>
 
-        <Panel
-          title="Pending"
-          description="Assign a driver to open requests"
-          tone="primary"
-          compact
-          bodyClassName="p-0"
-        >
+        <section className="space-y-2">
+          <div className="flex items-center justify-between gap-2 px-0.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Pending
+              {incoming.length > 0 ? ` · ${incoming.length}` : ""}
+            </p>
+            <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
+              <Link to="/trips">
+                {moreCount > 0 ? `View all (+${moreCount})` : "Open trips"}
+              </Link>
+            </Button>
+          </div>
+
           {requests.isLoading ? (
-            <PanelSkeleton rows={6} />
-          ) : incoming.length === 0 ? (
-            <div className="p-3">
-              <EmptyState compact title="Nothing pending" description="New requests show here." />
-            </div>
+            <PanelSkeleton rows={3} />
+          ) : preview.length === 0 ? (
+            <EmptyState
+              compact
+              title="Nothing pending"
+              description="New vehicle requests show up here for assign."
+            />
           ) : (
-            <ul className="list-stagger space-y-2.5 p-3 sm:space-y-3">
-              {incoming.map((r) => (
-                <li key={r.id}>
-                  <AdminRequestCard request={r} />
-                </li>
-              ))}
-            </ul>
+            <DualList
+              fill={false}
+              cards={
+                <ul className="list-stagger space-y-2">
+                  {preview.map((r) => {
+                    const canReject = !!user && r.status === "submitted";
+                    return (
+                      <li key={r.id}>
+                        <AdminRequestCard
+                          request={r}
+                          trailing={
+                            canReject ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8"
+                                disabled={decide.isPending}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (!user) return;
+                                  decide.mutate(
+                                    { requestId: r.id, approve: false, actorId: user.id },
+                                    {
+                                      onSuccess: () => toast.success(`Rejected ${r.reference}`),
+                                      onError: (err) => toast.error(err.message),
+                                    },
+                                  );
+                                }}
+                              >
+                                Reject
+                              </Button>
+                            ) : null
+                          }
+                        />
+                      </li>
+                    );
+                  })}
+                </ul>
+              }
+              table={
+                <div className="overflow-hidden rounded-lg border border-border">
+                  <TripListTable
+                    className="trip-list-board--pending"
+                    headers={["Time", "Employee", "Route", "Passengers", "Status"]}
+                  >
+                    {preview.map((r) => (
+                      <RequestTableRow key={r.id} request={r} showActions={false} />
+                    ))}
+                  </TripListTable>
+                </div>
+              }
+            />
           )}
-        </Panel>
+        </section>
       </div>
     </AppShell>
   );

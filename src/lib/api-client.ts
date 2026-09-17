@@ -26,7 +26,10 @@ export async function apiGet<T>(path: string) {
 }
 
 export async function apiPost<T>(path: string, body?: unknown) {
-  return apiFetch<T>(path, { method: "POST", body: body !== undefined ? JSON.stringify(body) : undefined });
+  return apiFetch<T>(path, {
+    method: "POST",
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
 }
 
 export async function apiPatch<T>(path: string, body: unknown) {

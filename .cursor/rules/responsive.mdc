@@ -12,10 +12,16 @@ User said this many times. Follow every UI create/change. Do not wait to be remi
 1. **Every page/change = both viewports.** Mobile (<1024) AND desktop (≥1024). Never ship mobile-only layout that stays skinny on desktop.
 2. **Desktop must use screen space — balanced.** Full canvas width (no leftover gutters from `max-width: 28–36rem` + `margin-inline: auto`). 2-column when content fits. Do NOT starve form/content to feed a giant map.
 3. **Maps stay medium side panels on desktop** (~35–40% width, ~18–20rem tall). Form / primary content gets majority width. Boxes (route, lists, cards) must be roomy — not tiny islands.
-4. **Minimize needless desktop scroll** without crushing content. Cap secondary panels; keep primary actions readable.
+4. **Minimize needless desktop scroll** without crushing content. Cap secondary panels; keep primary actions readable. **Never trap scroll** with `fillViewport` + nested `overflow: hidden` unless an inner pane has real bounded height + `overflow-y: auto`. Prefer normal page scroll for long admin request/detail forms.
 5. **Mobile stays mobile.** Sticky CTAs, bottom-nav clearance, sheets — keep.
 6. **Apply everywhere it is needed** — home, plan ride, request/trip detail, profile, list pages — not only the page just edited.
 7. **Verify both before done.** Check ≤1023 and ≥1024. Rebuild Docker app after UI CSS/JSX changes.
+
+## Transport admin requests
+
+- **No separate Approve button.** Assigning a driver/vehicle **is** approval (`assign_request` sets approved_* + status `assigned`).
+- Keep **Reject** for declining submitted requests without assign.
+- Assign UI must work from `submitted` (and legacy `approved`) status.
 
 ## Breakpoints
 

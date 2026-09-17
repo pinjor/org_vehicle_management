@@ -27,12 +27,24 @@ export function WhenRail({
   className?: string | undefined;
   size?: "sm" | "md" | "lg";
 }) {
-  if (!at) return null;
+  const railClass = cn(
+    "when-rail",
+    size === "sm" && "when-rail--sm",
+    size === "lg" && "when-rail--lg",
+    className,
+  );
+  if (!at) {
+    return (
+      <div className={railClass} aria-hidden>
+        <span className="when-rail__time">—</span>
+      </div>
+    );
+  }
   const dow = formatWeekday(at);
   const days = daysLeftLabel(at);
   return (
     <div
-      className={cn("when-rail", size === "sm" && "when-rail--sm", size === "lg" && "when-rail--lg", className)}
+      className={railClass}
       aria-label={`Pickup ${dow} ${formatDate(at)} ${formatTime(at)}${days ? `, ${days}` : ""}`}
     >
       {dow ? <span className="when-rail__dow">{dow}</span> : null}

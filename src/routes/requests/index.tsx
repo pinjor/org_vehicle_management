@@ -5,6 +5,11 @@ import { AppShell } from "@/components/app-shell";
 import { AdminRequestCard, EmployeeRequestCard } from "@/components/list-cards";
 import { RequestListSkeleton } from "@/components/loading-skeletons";
 import { EmptyState, FilterBar, Panel } from "@/components/fleet-ui";
+import {
+  DualList,
+  RequestTableRow,
+  TripListTable,
+} from "@/components/trip-list-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
@@ -52,7 +57,7 @@ function RequestsPage() {
       ]),
     );
     return [
-      { value: "all", label: "All", tone: "neutral" as const, count: counts.all ?? 0 },
+      { value: "all", label: "All", tone: "neutral" as const, count: counts["all"] ?? 0 },
       ...statusOptions.map((o) => ({
         value: o.value_key,
         label: o.label,
@@ -66,48 +71,84 @@ function RequestsPage() {
     <AppShell
       title={isDispatcher ? "Vehicle requests" : "My requests"}
       subtitle={isDispatcher ? "Every journey request and its current stage" : "Track your vehicle requests"}
-      actions={
-        isEmployee && !isDispatcher && !isDriver ? (
-          <Button asChild size="sm" tooltip="Start a new vehicle request form">
-            <Link to="/requests/new">
-              <Plus className="size-4" /> New request
-            </Link>
-          </Button>
-        ) : undefined
-      }
+      fillViewport
+      {...(isEmployee && !isDispatcher && !isDriver
+        ? {
+            actions: (
+              <Button asChild size="sm" tooltip="Start a new vehicle request form">
+                <Link to="/requests/new">
+                  <Plus className="size-4" /> New request
+                </Link>
+              </Button>
+            ),
+          }
+        : {})}
     >
-      <div className="role-dashboard page-stack min-w-0 w-full max-w-full">
-      <Panel tone="primary" compact className="min-w-0 max-w-full" bodyClassName="p-0 min-w-0 max-w-full overflow-hidden">
-        <div className="min-w-0 max-w-full space-y-2.5 overflow-hidden border-b border-border p-3 sm:p-3.5">
-          <FilterBar value={filter} onChange={setFilter} options={filterOptions} label="Filter by status" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search reference, purpose…"
-            className="h-9 min-w-0 w-full"
-          />
-        </div>
-
-        {isLoading ? (
-          <RequestListSkeleton />
-        ) : rows.length === 0 ? (
-          <div className="p-3">
-            <EmptyState compact title="No requests match" description="Try a different filter or raise a new request." />
+      <div className="role-dashboard page-stack page-stack--fill min-w-0 w-full max-w-full">
+        <Panel
+          tone="primary"
+          compact
+          className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col"
+          bodyClassName="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden p-0"
+        >
+          <div className="list-toolbar shrink-0 overflow-hidden border-b border-border p-3 sm:p-3.5">
+            <FilterBar
+              value={filter}
+              onChange={setFilter}
+              options={filterOptions}
+              label="Filter by status"
+              className="list-toolbar__tabs flex-nowrap overflow-x-auto"
+            />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search purpose, name…"
+              className="list-toolbar__search"
+            />
           </div>
-        ) : (
-          <ul key={`${filter}-${search}`} className="list-stagger space-y-2 p-3">
-            {rows.map((r) => (
-              <li key={r.id}>
-                {isDispatcher ? (
-                  <AdminRequestCard request={r} />
-                ) : (
-                  <EmployeeRequestCard request={r} />
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
+
+          {isLoading ? (
+            <RequestListSkeleton />
+          ) : rows.length === 0 ? (
+            <div className="p-3">
+              <EmptyState compact title="No requests match" description="Try a different filter or raise a new request." />
+            </div>
+          ) : (
+            <DualList
+              cards={
+                <ul key={`${filter}-${search}-m`} className="list-stagger space-y-2 p-3">
+                  {rows.map((r) => (
+                    <li key={r.id}>
+                      {isDispatcher ? (
+                        <AdminRequestCard request={r} />
+                      ) : (
+                        <EmployeeRequestCard request={r} />
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              }
+              table={
+                <TripListTable
+                  fill
+                  headers={
+                    isDispatcher
+                      ? ["Time", "Employee", "Route", "Pax / Vehicle", "Status", "Actions"]
+                      : ["Time", "Driver", "Route", "Passengers", "Status", "Actions"]
+                  }
+                >
+                  {rows.map((r) => (
+                    <RequestTableRow
+                      key={r.id}
+                      request={r}
+                      mode={isDispatcher ? "admin" : "employee"}
+                    />
+                  ))}
+                </TripListTable>
+              }
+            />
+          )}
+        </Panel>
       </div>
     </AppShell>
   );

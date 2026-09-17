@@ -6,7 +6,7 @@ import { query } from "./db";
 import type { AppRole } from "@/lib/fleet";
 
 const COOKIE = "fleetops_session";
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET ?? "fleetops-dev-secret-change-me");
+const JWT_SECRET = new TextEncoder().encode(process.env["JWT_SECRET"] ?? "fleetops-dev-secret-change-me");
 
 export type SessionUser = {
   id: string;
@@ -63,7 +63,7 @@ export async function loadSessionUser(userId: string): Promise<SessionUser | nul
 
 export async function signupUser(phone: string, password: string) {
   const lookup = await query(`select public.lookup_roster_phone($1) as lookup_roster_phone`, [phone]);
-  const info = lookup.rows[0]?.lookup_roster_phone as {
+  const info = lookup.rows[0]?.["lookup_roster_phone"] as {
     allowed: boolean;
     reason?: string;
     full_name?: string;
@@ -122,7 +122,7 @@ export function setSessionCookie(c: Context, token: string) {
   const secure =
     forwarded === "https" ||
     c.req.url.startsWith("https://") ||
-    process.env.COOKIE_SECURE === "true";
+    process.env["COOKIE_SECURE"] === "true";
   setCookie(c, COOKIE, token, {
     httpOnly: true,
     sameSite: "Lax",

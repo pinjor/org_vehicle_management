@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/fleet-ui";
 import { DRIVER_STATUS, VEHICLE_STATUS } from "@/lib/fleet";
 import { formatBdPhone } from "@/lib/phone";
+import { apiGet } from "@/lib/api-client";
 import {
   useAssignRequest,
   useDrivers,
@@ -14,39 +15,47 @@ import {
 } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
-function vehicleBlockReason(v: VehicleRecord, passengers: number): string | null {
+function vehicleHardBlock(v: VehicleRecord, passengers: number): string | null {
   if (Number(v.seat_capacity) < passengers) return "Too few seats";
-  if (v.operational_status === "available") return null;
-  const short: Record<string, string> = {
-    reserved: "Reserved",
-    on_trip: "On trip",
-    under_maintenance: "Maintenance",
-    unavailable: "Unavailable",
-    out_of_service: "Out of service",
-    retired: "Retired",
-  };
-  return short[v.operational_status] ?? VEHICLE_STATUS[v.operational_status]?.label ?? v.operational_status;
+  if (["under_maintenance", "unavailable", "out_of_service", "retired"].includes(v.operational_status)) {
+    return VEHICLE_STATUS[v.operational_status]?.label ?? v.operational_status;
+  }
+  return null;
 }
 
-function driverBlockReason(d: DriverRecord): string | null {
-  if (d.current_status === "available") return null;
-  const short: Record<string, string> = {
-    reserved: "Reserved",
-    driving: "On trip",
-    break: "On break",
-    off_duty: "Off duty",
-    leave: "On leave",
-    unavailable: "Unavailable",
-    suspended: "Suspended",
-  };
-  return short[d.current_status] ?? DRIVER_STATUS[d.current_status]?.label ?? d.current_status;
+function driverHardBlock(d: DriverRecord): string | null {
+  if (["leave", "off_duty", "unavailable", "suspended"].includes(d.current_status)) {
+    return DRIVER_STATUS[d.current_status]?.label ?? d.current_status;
+  }
+  return null;
 }
 
-type Pair = { driver: DriverRecord; vehicle: VehicleRecord };
+type Pair = {
+  driver: DriverRecord;
+  vehicle: VehicleRecord | null;
+  /** Null → selectable */
+  blockReason: string | null;
+};
+
+function journeyKey(raw?: string | null): string | null {
+  if (!raw) return null;
+  const s = String(raw);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Dhaka",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
 
 export function AssignmentPanel({
   requestId,
   passengers,
+  journeyDate,
+  pickupAt,
   disabled,
   onAssigned,
   initialVehicleId,
@@ -55,11 +64,14 @@ export function AssignmentPanel({
 }: {
   requestId: string;
   passengers: number;
+  /** YYYY-MM-DD — preferred for day occupancy */
+  journeyDate?: string | null;
+  pickupAt?: string | null;
   expectedEnd?: string;
   disabled?: boolean;
   onAssigned?: () => void;
-  initialVehicleId?: string | null;
-  initialDriverId?: string | null;
+  initialVehicleId?: string | null | undefined;
+  initialDriverId?: string | null | undefined;
   /** Re-assign an existing trip pairing */
   changeMode?: boolean;
 }) {
@@ -67,38 +79,85 @@ export function AssignmentPanel({
   const drivers = useDrivers();
   const assign = useAssignRequest();
   const [query, setQuery] = useState("");
-  const [picked, setPicked] = useState<string>(() =>
-    initialDriverId && initialVehicleId ? `${initialDriverId}:${initialVehicleId}` : "",
-  );
+
+  const day = journeyKey(journeyDate) ?? journeyKey(pickupAt);
+
+  const busy = useQuery({
+    queryKey: ["assignments-busy", day, requestId],
+    enabled: !!day,
+    queryFn: () =>
+      apiGet<{ driverIds: string[]; vehicleIds: string[] }>(
+        `/api/assignments/busy?date=${day}&excludeRequestId=${requestId}`,
+      ),
+  });
+
+  const busyDrivers = useMemo(() => new Set(busy.data?.driverIds ?? []), [busy.data]);
+  const busyVehicles = useMemo(() => new Set(busy.data?.vehicleIds ?? []), [busy.data]);
 
   const freeVehicles = useMemo(() => {
-    const rows = (vehicles.data ?? []).filter(
-      (v) => !vehicleBlockReason(v, passengers) || v.id === initialVehicleId,
-    );
+    const rows = (vehicles.data ?? []).filter((v) => {
+      if (v.id === initialVehicleId) return true;
+      if (vehicleHardBlock(v, passengers)) return false;
+      if (busyVehicles.has(v.id)) return false;
+      return true;
+    });
     rows.sort((a, b) => a.fleet_number.localeCompare(b.fleet_number));
     return rows;
-  }, [vehicles.data, passengers, initialVehicleId]);
+  }, [vehicles.data, passengers, initialVehicleId, busyVehicles]);
 
   const pairs = useMemo(() => {
-    const rows = (drivers.data ?? []).filter(
-      (d) => !driverBlockReason(d) || d.id === initialDriverId,
-    );
+    const allVehicles = vehicles.data ?? [];
+    const rows = [...(drivers.data ?? [])];
     rows.sort((a, b) => a.full_name.localeCompare(b.full_name));
 
     const out: Pair[] = [];
     for (const driver of rows) {
-      const linked = freeVehicles.find((v) => v.id === driver.primary_vehicle_id);
-      const vehicle =
-        linked ??
-        (initialDriverId === driver.id
-          ? freeVehicles.find((v) => v.id === initialVehicleId)
-          : undefined) ??
-        freeVehicles[0];
-      if (!vehicle) continue;
-      out.push({ driver, vehicle });
+      const isInitial = driver.id === initialDriverId;
+      const statusBlock = !isInitial ? driverHardBlock(driver) : null;
+      const dayBusy = !isInitial && busyDrivers.has(driver.id);
+
+      const freeLinked = freeVehicles.find((v) => v.id === driver.primary_vehicle_id);
+      const anyLinked = allVehicles.find((v) => v.id === driver.primary_vehicle_id);
+      const freeVehicle =
+        freeLinked ??
+        (isInitial ? freeVehicles.find((v) => v.id === initialVehicleId) : undefined) ??
+        freeVehicles[0] ??
+        null;
+      const displayVehicle = freeVehicle ?? anyLinked ?? null;
+
+      let blockReason: string | null = null;
+      if (statusBlock) {
+        blockReason = statusBlock;
+      } else if (dayBusy) {
+        blockReason = "Not available that day";
+      } else if (!freeVehicle) {
+        blockReason = "No free vehicle";
+      }
+
+      out.push({ driver, vehicle: displayVehicle, blockReason });
     }
+
+    // Selectable first, then blocked
+    out.sort((a, b) => {
+      const aOk = a.blockReason ? 1 : 0;
+      const bOk = b.blockReason ? 1 : 0;
+      if (aOk !== bOk) return aOk - bOk;
+      return a.driver.full_name.localeCompare(b.driver.full_name);
+    });
     return out;
-  }, [drivers.data, freeVehicles, initialDriverId, initialVehicleId]);
+  }, [
+    drivers.data,
+    vehicles.data,
+    freeVehicles,
+    initialDriverId,
+    initialVehicleId,
+    busyDrivers,
+  ]);
+
+  const freeCount = useMemo(
+    () => pairs.filter((p) => !p.blockReason && p.vehicle).length,
+    [pairs],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -108,27 +167,21 @@ export function AssignmentPanel({
       const name = driver.full_name.toLowerCase();
       const phone = (driver.phone ?? "").toLowerCase();
       const phoneDigits = phone.replace(/\D/g, "");
-      const fleet = `${vehicle.fleet_number} ${vehicle.name}`.toLowerCase();
-      if (name.includes(q) || phone.includes(q) || fleet.includes(q)) return true;
+      const fleet = vehicle
+        ? `${vehicle.fleet_number} ${vehicle.name}`.toLowerCase()
+        : "";
+      if (name.includes(q) || phone.includes(q) || (fleet && fleet.includes(q))) return true;
       if (digits.length >= 3 && phoneDigits.includes(digits)) return true;
       return false;
     });
   }, [pairs, query]);
 
-  const selected = pairs.find((p) => `${p.driver.id}:${p.vehicle.id}` === picked) ?? null;
   const searchActive = query.trim().length > 0;
 
-  if (disabled) {
-    return <EmptyState compact title="Can't assign" description="This request is closed." />;
-  }
-
-  function runAssign() {
-    if (!selected) {
-      toast.error("Pick a driver");
-      return;
-    }
+  function runAssign(driverId: string, vehicleId: string) {
+    if (assign.isPending) return;
     assign.mutate(
-      { requestId, vehicleId: selected.vehicle.id, driverId: selected.driver.id },
+      { requestId, vehicleId, driverId },
       {
         onSuccess: () => {
           toast.success(changeMode ? "Updated" : "Assigned");
@@ -139,7 +192,11 @@ export function AssignmentPanel({
     );
   }
 
-  if (vehicles.isLoading || drivers.isLoading) {
+  if (disabled) {
+    return <EmptyState compact title="Can't assign" description="This request is closed." />;
+  }
+
+  if (vehicles.isLoading || drivers.isLoading || (day && busy.isLoading)) {
     return <p className="text-sm text-muted-foreground">Loading drivers…</p>;
   }
 
@@ -147,12 +204,8 @@ export function AssignmentPanel({
     return (
       <EmptyState
         compact
-        title="No drivers free"
-        description={
-          freeVehicles.length === 0
-            ? "No free vehicles with enough seats."
-            : "No available drivers to assign."
-        }
+        title="No drivers"
+        description="Add drivers in the roster before assigning."
       />
     );
   }
@@ -164,10 +217,7 @@ export function AssignmentPanel({
         <input
           type="search"
           value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setPicked("");
-          }}
+          onChange={(e) => setQuery(e.target.value)}
           placeholder="Search name or phone…"
           className="assign-panel__search-input"
           autoComplete="off"
@@ -175,52 +225,71 @@ export function AssignmentPanel({
         />
       </label>
 
+      {day ? (
+        <p className="text-xs text-muted-foreground">
+          Occupancy for {day} · {freeCount} free · search to pick
+        </p>
+      ) : null}
+
       {!searchActive ? (
         <p className="text-sm text-muted-foreground">
-          Type a name or phone to find a driver ({pairs.length} available).
+          Type a name or phone to find a driver ({freeCount} free
+          {day ? " this day" : ""}
+          {pairs.length > freeCount ? ` · ${pairs.length - freeCount} unavailable` : ""}).
         </p>
       ) : filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground">No drivers match “{query.trim()}”.</p>
       ) : (
         <ul className="assign-panel__list" role="listbox" aria-label="Matching drivers">
-          {filtered.map(({ driver, vehicle }) => {
-            const key = `${driver.id}:${vehicle.id}`;
-            const active = picked === key;
+          {filtered.map(({ driver, vehicle, blockReason }) => {
+            const key = `${driver.id}:${vehicle?.id ?? "none"}`;
             const primary =
-              !!driver.primary_vehicle_id && driver.primary_vehicle_id === vehicle.id;
+              !!vehicle &&
+              !!driver.primary_vehicle_id &&
+              driver.primary_vehicle_id === vehicle.id;
             const phone = driver.phone?.trim();
+            const canSelect = !blockReason && !!vehicle && !assign.isPending;
             return (
               <li key={key}>
                 <button
                   type="button"
                   role="option"
-                  aria-selected={active}
-                  className={cn("assign-panel__row", active && "assign-panel__row--active")}
-                  onClick={() => setPicked(key)}
+                  aria-selected={false}
+                  aria-disabled={!canSelect}
+                  disabled={!canSelect}
+                  className={cn(
+                    "assign-panel__row",
+                    blockReason && "assign-panel__row--blocked",
+                    assign.isPending && "opacity-60",
+                  )}
+                  onClick={() => {
+                    if (!canSelect || !vehicle) return;
+                    runAssign(driver.id, vehicle.id);
+                  }}
                 >
                   <span className="assign-panel__name">{driver.full_name}</span>
                   {phone ? (
                     <span className="assign-panel__phone">{formatBdPhone(phone)}</span>
                   ) : null}
-                  <span className="assign-panel__meta">
-                    {vehicle.fleet_number} · {vehicle.name}
-                    {primary ? " · Primary" : ""}
-                  </span>
+                  {vehicle ? (
+                    <span className="assign-panel__meta">
+                      {vehicle.fleet_number} · {vehicle.name}
+                      {primary ? " · Primary" : ""}
+                      {canSelect && !assign.isPending ? " · Tap to assign" : null}
+                      {assign.isPending && canSelect ? " · Assigning…" : null}
+                    </span>
+                  ) : (
+                    <span className="assign-panel__meta">No linked vehicle</span>
+                  )}
+                  {blockReason ? (
+                    <span className="assign-panel__blocked">{blockReason}</span>
+                  ) : null}
                 </button>
               </li>
             );
           })}
         </ul>
       )}
-      <Button
-        size="sm"
-        className="min-h-10 w-full"
-        disabled={assign.isPending || !selected}
-        tooltip={changeMode ? "Update assignment" : "Assign driver"}
-        onClick={runAssign}
-      >
-        {assign.isPending ? "…" : changeMode ? "Update assignment" : "Assign driver"}
-      </Button>
     </section>
   );
 }

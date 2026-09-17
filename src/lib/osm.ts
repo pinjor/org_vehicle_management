@@ -93,7 +93,7 @@ export function formatLocalClock(localInput: string): string {
   const [hh, mm] = timePart!.slice(0, 5).split(":").map(Number);
   const dt = new Date(y!, mo! - 1, d!, hh!, mm!);
   return dt.toLocaleString("en-US", {
-    weekday: "short",
+    weekday: "long",
     day: "numeric",
     month: "short",
     hour: "numeric",

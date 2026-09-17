@@ -1,0 +1,25 @@
+---
+description: Transport admin assign flow + responsive UI rules for Vehicle Management System
+globs: org_vehicle_management/**/*.{tsx,ts,css},fleetops_mobile/**/*.dart
+alwaysApply: true
+---
+
+# Admin assign + responsive
+
+## Assign = approve
+- Do **not** add a separate **Approve** button for transport admin on request/ride detail, pending cards, dispatch, or incoming modals.
+- Assigning a driver/vehicle **is** approval (`assign_request` sets `approved_by` / `approved_at` and status `assigned`).
+- Keep **Reject** only where a submitted request can be declined without assignment.
+- Prefer assign from `submitted` (and `approved` for legacy rows) — never require a pre-approve step in UI.
+- **Tap driver = assign** in `AssignmentPanel` (no second Confirm button).
+
+## Day occupancy
+- Driver/vehicle busy by **journey_date** (calendar day), not time-window overlap.
+- Same driver/vehicle: max one active (`assigned`/`in_progress`) trip **per day**; other days OK.
+- Employees may create **multiple** ride requests (no single-active-ride lock).
+
+## Responsive everything
+- Every new or changed UI must work on mobile and desktop (sm/md/lg+).
+- Prefer fluid layouts: `min-w-0`, wrap, stack on small screens; avoid fixed widths that clip.
+- Do not trap scroll with nested `overflow: hidden` + fixed viewport height unless an inner pane has a real `overflow-y: auto` and bounded height. Prefer page/container scroll for long forms (e.g. admin request detail).
+- Test mental model: phone portrait + laptop — content reachable without horizontal cut-off.

@@ -45,6 +45,70 @@ export const Route = createFileRoute("/fleet/$vehicleId")({
   component: VehicleProfilePage,
 });
 
+type VehicleFormState = {
+  name: string;
+  registration_number: string;
+  fleet_number: string;
+  category: string;
+  brand: string;
+  model: string;
+  model_year: string | number;
+  color: string;
+  seat_capacity: number;
+  luggage_capacity: number;
+  fuel_type: string;
+  transmission: string;
+  has_ac: boolean;
+  is_vip: boolean;
+  ownership: string;
+  branch: string;
+  odometer_km: number;
+  last_service_km: number;
+  last_service_date: string;
+  service_interval_km: number;
+  registration_expiry: string;
+  fitness_expiry: string;
+  insurance_expiry: string;
+  tax_token_expiry: string;
+  last_repair_date: string;
+  last_repair_summary: string;
+  operational_status: string;
+  notes: string;
+  primary_driver_id: string;
+};
+
+const EMPTY_VEHICLE_FORM: VehicleFormState = {
+  name: "",
+  registration_number: "",
+  fleet_number: "",
+  category: "",
+  brand: "",
+  model: "",
+  model_year: "",
+  color: "",
+  seat_capacity: 0,
+  luggage_capacity: 0,
+  fuel_type: "",
+  transmission: "",
+  has_ac: false,
+  is_vip: false,
+  ownership: "",
+  branch: "",
+  odometer_km: 0,
+  last_service_km: 0,
+  last_service_date: "",
+  service_interval_km: 0,
+  registration_expiry: "",
+  fitness_expiry: "",
+  insurance_expiry: "",
+  tax_token_expiry: "",
+  last_repair_date: "",
+  last_repair_summary: "",
+  operational_status: "",
+  notes: "",
+  primary_driver_id: "",
+};
+
 function VehicleProfilePage() {
   const { vehicleId } = Route.useParams();
   const { isDispatcher } = useAuth();
@@ -57,7 +121,7 @@ function VehicleProfilePage() {
   const { data: maintenance } = useUnavailabilityRequests();
   const { data: drivers } = useDrivers();
   const update = useUpdateVehicle();
-  const [form, setForm] = useState<Record<string, string | number | boolean>>({});
+  const [form, setForm] = useState<VehicleFormState>(EMPTY_VEHICLE_FORM);
 
   const vehicleMaintenance = useMemo(
     () => (maintenance ?? []).filter((m) => m.vehicle_id === vehicleId).slice(0, 8),
@@ -117,7 +181,8 @@ function VehicleProfilePage() {
     );
   }
 
-  const set = (k: string, v: string | number | boolean) => setForm((f) => ({ ...f, [k]: v }));
+  const set = <K extends keyof VehicleFormState>(k: K, v: VehicleFormState[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
   const odo = Number(form.odometer_km ?? vehicle.odometer_km);
   const lastSvcKm = Number(form.last_service_km ?? vehicle.last_service_km);
   const interval = Number(form.service_interval_km ?? vehicle.service_interval_km);
@@ -327,10 +392,10 @@ function VehicleProfilePage() {
           <Panel title="Capacity & fuel" compact bodyClassName="profile-panel-body">
             <div className="profile-form-fields">
               <Field label="Seats">
-                <input className="app-field-input" type="number" value={String(form.seat_capacity ?? "")} onChange={(e) => set("seat_capacity", e.target.value)} disabled={!isDispatcher} />
+                <input className="app-field-input" type="number" value={String(form.seat_capacity ?? "")} onChange={(e) => set("seat_capacity", Number(e.target.value))} disabled={!isDispatcher} />
               </Field>
               <Field label="Luggage">
-                <input className="app-field-input" type="number" value={String(form.luggage_capacity ?? "")} onChange={(e) => set("luggage_capacity", e.target.value)} disabled={!isDispatcher} />
+                <input className="app-field-input" type="number" value={String(form.luggage_capacity ?? "")} onChange={(e) => set("luggage_capacity", Number(e.target.value))} disabled={!isDispatcher} />
               </Field>
               <Field label="Fuel">
                 <select className="app-field-select" value={String(form.fuel_type ?? "")} onChange={(e) => set("fuel_type", e.target.value)} disabled={!isDispatcher}>
@@ -375,16 +440,16 @@ function VehicleProfilePage() {
           <Panel title="Service & operations" compact bodyClassName="profile-panel-body">
             <div className="profile-form-fields">
               <Field label="Odometer (km)">
-                <input className="app-field-input" type="number" value={String(form.odometer_km ?? "")} onChange={(e) => set("odometer_km", e.target.value)} disabled={!isDispatcher} />
+                <input className="app-field-input" type="number" value={String(form.odometer_km ?? "")} onChange={(e) => set("odometer_km", Number(e.target.value))} disabled={!isDispatcher} />
               </Field>
               <Field label="Last service km">
-                <input className="app-field-input" type="number" value={String(form.last_service_km ?? "")} onChange={(e) => set("last_service_km", e.target.value)} disabled={!isDispatcher} />
+                <input className="app-field-input" type="number" value={String(form.last_service_km ?? "")} onChange={(e) => set("last_service_km", Number(e.target.value))} disabled={!isDispatcher} />
               </Field>
               <Field label="Last service date">
                 <input className="app-field-input" type="date" value={String(form.last_service_date ?? "")} onChange={(e) => set("last_service_date", e.target.value)} disabled={!isDispatcher} />
               </Field>
               <Field label="Interval (km)">
-                <input className="app-field-input" type="number" value={String(form.service_interval_km ?? "")} onChange={(e) => set("service_interval_km", e.target.value)} disabled={!isDispatcher} />
+                <input className="app-field-input" type="number" value={String(form.service_interval_km ?? "")} onChange={(e) => set("service_interval_km", Number(e.target.value))} disabled={!isDispatcher} />
               </Field>
               <Field label="Last repair date">
                 <input className="app-field-input" type="date" value={String(form.last_repair_date ?? "")} onChange={(e) => set("last_repair_date", e.target.value)} disabled={!isDispatcher} />

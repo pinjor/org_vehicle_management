@@ -9,15 +9,10 @@ import {
 } from "lucide-react";
 import { useMemo } from "react";
 import { EmployeeHomeIllustration } from "@/components/employee-home-illustration";
-import { WhenRail } from "@/components/info-blocks";
-import { LookupChip } from "@/components/lookup-chip";
+import { RequestMirrorCard } from "@/components/trip-mirror-card";
 import { Button } from "@/components/ui/button";
-import { MetaChip } from "@/components/fleet-ui";
 import { useAuth } from "@/lib/auth";
-import { passengerLabel } from "@/lib/fleet";
-import { formatBdPhone } from "@/lib/phone";
-import { routeLineCompact } from "@/lib/route-summary";
-import { useLocations, useRequests } from "@/lib/queries";
+import { useLocations, useRequests, type RequestRow } from "@/lib/queries";
 
 type SavedLocation = {
   id: string;
@@ -34,6 +29,9 @@ type RecentPlace = {
   kind: "office" | "airport" | "place";
 };
 
+const LIVE_STATUSES = new Set(["in_progress"]);
+const WAIT_STATUSES = new Set(["submitted", "approved", "assigned"]);
+
 function placeIcon(kind: RecentPlace["kind"]) {
   if (kind === "office") return Briefcase;
   if (kind === "airport") return Plane;
@@ -47,7 +45,33 @@ function guessKind(name: string, type?: string | null): RecentPlace["kind"] {
   return "place";
 }
 
-/** DriveFlow-style employee home: map card, Where to?, recent places. */
+function pickupTime(r: RequestRow) {
+  const t = new Date(r.pickup_at).getTime();
+  return Number.isFinite(t) ? t : Number.NaN;
+}
+
+/** Soonest upcoming by pickup; if none upcoming, least-overdue past. Never by created_at. */
+function nearestByPickup(rows: RequestRow[]) {
+  const valid = rows.filter((r) => Number.isFinite(pickupTime(r)));
+  if (valid.length === 0) return rows[0] ?? null;
+
+  const now = Date.now();
+  const upcoming = valid
+    .filter((r) => pickupTime(r) >= now)
+    .sort((a, b) => pickupTime(a) - pickupTime(b));
+  if (upcoming[0]) return upcoming[0];
+
+  return [...valid].sort((a, b) => pickupTime(b) - pickupTime(a))[0] ?? null;
+}
+
+/** Live trip if any; else nearest pending/assigned by pickup time. */
+function pickDashboardBanner(rows: RequestRow[]) {
+  const live = nearestByPickup(rows.filter((r) => LIVE_STATUSES.has(r.status)));
+  if (live) return live;
+  return nearestByPickup(rows.filter((r) => WAIT_STATUSES.has(r.status)));
+}
+
+/** DriveFlow-style employee home: one banner row, Where to?, saved places. */
 export function EmployeeRideHome() {
   const { profile, user } = useAuth();
   const mine = useRequests(user?.id ? { requesterId: user.id } : undefined);
@@ -55,20 +79,7 @@ export function EmployeeRideHome() {
 
   const rows = mine.data ?? [];
   const saved = (locations.data ?? []) as SavedLocation[];
-
-  const activeRide = [...rows]
-    .filter((r) => ["assigned", "in_progress"].includes(r.status))
-    .sort((a, b) => new Date(b.pickup_at).getTime() - new Date(a.pickup_at).getTime())[0];
-
-  const waitingRide = !activeRide
-    ? [...rows]
-        .filter((r) => ["submitted", "approved"].includes(r.status))
-        .sort((a, b) => new Date(a.pickup_at).getTime() - new Date(b.pickup_at).getTime())[0]
-    : undefined;
-
-  const banner = activeRide ?? waitingRide;
-  const isLive = !!activeRide;
-  const driverPhone = activeRide?.drivers?.phone;
+  const ride = useMemo(() => pickDashboardBanner(rows), [rows]);
 
   const recent = useMemo(() => {
     return saved.slice(0, 5).map((loc) => ({
@@ -84,55 +95,9 @@ export function EmployeeRideHome() {
 
   return (
     <div className="ride-home">
-      {banner ? (
-        <div
-          className={
-            isLive
-              ? "ride-home__active-card ride-home__active-card--live"
-              : "ride-home__active-card ride-home__active-card--wait"
-          }
-        >
-          <Link
-            to="/requests/$requestId"
-            params={{ requestId: banner.id }}
-            className="ride-home__active-main"
-          >
-            <WhenRail at={banner.pickup_at} size="sm" className="ride-home__when" />
-            <div className="ride-home__active-body min-w-0">
-              <div className="ride-home__active-top">
-                <div className="min-w-0 flex-1">
-                  <p className="ride-home__active-label">
-                    {isLive ? "Active" : "Pending"}
-                  </p>
-                  <p className="ride-home__active-title">
-                    {routeLineCompact(banner.request_route_points) ?? banner.purpose ?? "Your trip"}
-                  </p>
-                </div>
-                <LookupChip group="request_status" value={banner.status} />
-              </div>
-              {isLive && banner.drivers?.full_name ? (
-                <div className="ride-home__driver">
-                  <p className="ride-home__driver-name">{banner.drivers.full_name}</p>
-                  {driverPhone ? (
-                    <p className="ride-home__driver-phone">{formatBdPhone(driverPhone)}</p>
-                  ) : null}
-                  {banner.vehicles?.registration_number ? (
-                    <div className="ride-home__driver-meta">
-                      <span>{banner.vehicles.registration_number}</span>
-                    </div>
-                  ) : null}
-                </div>
-              ) : !isLive ? (
-                <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                  <MetaChip label={passengerLabel(banner.passenger_count)} tone="neutral" />
-                </div>
-              ) : null}
-            </div>
-            <span className="ride-home__active-cta">
-              {isLive ? "Track" : "View"}
-              <ChevronRight className="size-4" />
-            </span>
-          </Link>
+      {ride ? (
+        <div className="ride-home__banner-table">
+          <RequestMirrorCard request={ride} mode="employee" />
         </div>
       ) : null}
 
@@ -144,7 +109,7 @@ export function EmployeeRideHome() {
         <div className="ride-home__hero-body">
           <h2 className="ride-home__where">Where to?</h2>
           <p className="ride-home__where-sub">
-            {firstName ? `Hi ${firstName}` : "Book a ride"}
+            {firstName ? `Hi ${firstName} — book another ride anytime` : "Book a ride anytime"}
           </p>
 
           <Link to="/requests/new" className="ride-home__search" aria-label="Where to? — open book page">

@@ -23,6 +23,7 @@ export type RequestRow = {
   trip_type: string;
   passenger_count: number;
   pickup_at: string;
+  journey_date?: string;
   expected_end_at?: string;
   created_at: string;
   requester_name: string;
@@ -295,7 +296,7 @@ export function useLocations() {
 export function useDepartments() {
   return useQuery({
     queryKey: ["departments"],
-    queryFn: () => apiGet<unknown[]>("/api/departments"),
+    queryFn: () => apiGet<{ id: string; name: string }[]>("/api/departments"),
   });
 }
 
@@ -415,6 +416,7 @@ function useInvalidateFleet() {
       "trip-location",
       "audit",
       "roster",
+      "assignments-busy",
     ]) {
       void qc.invalidateQueries({ queryKey: [key] });
     }
@@ -721,7 +723,7 @@ export function useProfile() {
 export function useUpdateProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { full_name?: string; department_id?: string | null; phone?: string }) =>
+    mutationFn: (input: { full_name?: string; department_id?: string | null; phone?: string | undefined }) =>
       apiPatch<UserProfile>("/api/profile", input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["profile"] }),
   });
@@ -785,7 +787,7 @@ export function useCreateLocation() {
   return useMutation({
     mutationFn: (input: {
       name: string;
-      address?: string;
+      address?: string | undefined;
       latitude?: number | null;
       longitude?: number | null;
       location_type?: string;

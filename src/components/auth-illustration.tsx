@@ -22,7 +22,7 @@ const SVG_BY_VARIANT: Record<AuthIllustrationVariant, string> = {
 
 type AuthIllustrationProps = {
   variant: AuthIllustrationVariant;
-  className?: string;
+  className?: string | undefined;
 };
 
 export function AuthIllustration({ variant, className }: AuthIllustrationProps) {

@@ -36,6 +36,15 @@ function DriversPage() {
   const create = useCreateDriver();
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+
+  if (!isDispatcher) {
+    return (
+      <AppShell title="Drivers" subtitle="Admin only">
+        <EmptyState compact title="Not available" description="Driver roster is for transport admin." />
+      </AppShell>
+    );
+  }
+
   const emptyForm = {
     full_name: "",
     driver_code: "",

@@ -31,6 +31,7 @@ import { Route as MyTripsTripIdRouteImport } from './routes/my-trips/$tripId'
 import { Route as RequestsIndexRouteImport } from './routes/requests/index'
 import { Route as RequestsRequestIdRouteImport } from './routes/requests/$requestId'
 import { Route as RequestsNewRouteImport } from './routes/requests/new'
+import { Route as RequestsPendingRouteImport } from './routes/requests/pending'
 import { Route as AdminEmployeesEmployeeIdRouteImport } from './routes/admin/employees/$employeeId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -143,6 +144,11 @@ const RequestsNewRoute = RequestsNewRouteImport.update({
   path: '/requests/new',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RequestsPendingRoute = RequestsPendingRouteImport.update({
+  id: '/requests/pending',
+  path: '/requests/pending',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminEmployeesEmployeeIdRoute =
   AdminEmployeesEmployeeIdRouteImport.update({
     id: '/$employeeId',
@@ -169,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/my-trips/$tripId': typeof MyTripsTripIdRoute
   '/requests/$requestId': typeof RequestsRequestIdRoute
   '/requests/new': typeof RequestsNewRoute
+  '/requests/pending': typeof RequestsPendingRoute
   '/drivers/': typeof DriversIndexRoute
   '/fleet/': typeof FleetIndexRoute
   '/my-trips/': typeof MyTripsIndexRoute
@@ -191,6 +198,7 @@ export interface FileRoutesByTo {
   '/my-trips/$tripId': typeof MyTripsTripIdRoute
   '/requests/$requestId': typeof RequestsRequestIdRoute
   '/requests/new': typeof RequestsNewRoute
+  '/requests/pending': typeof RequestsPendingRoute
   '/drivers': typeof DriversIndexRoute
   '/fleet': typeof FleetIndexRoute
   '/my-trips': typeof MyTripsIndexRoute
@@ -217,6 +225,7 @@ export interface FileRoutesById {
   '/my-trips/$tripId': typeof MyTripsTripIdRoute
   '/requests/$requestId': typeof RequestsRequestIdRoute
   '/requests/new': typeof RequestsNewRoute
+  '/requests/pending': typeof RequestsPendingRoute
   '/drivers/': typeof DriversIndexRoute
   '/fleet/': typeof FleetIndexRoute
   '/my-trips/': typeof MyTripsIndexRoute
@@ -244,6 +253,7 @@ export interface FileRouteTypes {
     | '/my-trips/$tripId'
     | '/requests/$requestId'
     | '/requests/new'
+    | '/requests/pending'
     | '/drivers/'
     | '/fleet/'
     | '/my-trips/'
@@ -266,6 +276,7 @@ export interface FileRouteTypes {
     | '/my-trips/$tripId'
     | '/requests/$requestId'
     | '/requests/new'
+    | '/requests/pending'
     | '/drivers'
     | '/fleet'
     | '/my-trips'
@@ -291,6 +302,7 @@ export interface FileRouteTypes {
     | '/my-trips/$tripId'
     | '/requests/$requestId'
     | '/requests/new'
+    | '/requests/pending'
     | '/drivers/'
     | '/fleet/'
     | '/my-trips/'
@@ -314,6 +326,7 @@ export interface RootRouteChildren {
   AdminUsersRoute: typeof AdminUsersRoute
   RequestsRequestIdRoute: typeof RequestsRequestIdRoute
   RequestsNewRoute: typeof RequestsNewRoute
+  RequestsPendingRoute: typeof RequestsPendingRoute
   RequestsIndexRoute: typeof RequestsIndexRoute
 }
 
@@ -473,6 +486,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RequestsNewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/requests/pending': {
+      id: '/requests/pending'
+      path: '/requests/pending'
+      fullPath: '/requests/pending'
+      preLoaderRoute: typeof RequestsPendingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/employees/$employeeId': {
       id: '/admin/employees/$employeeId'
       path: '/$employeeId'
@@ -553,18 +573,9 @@ const rootRouteChildren: RootRouteChildren = {
   AdminUsersRoute: AdminUsersRoute,
   RequestsRequestIdRoute: RequestsRequestIdRoute,
   RequestsNewRoute: RequestsNewRoute,
+  RequestsPendingRoute: RequestsPendingRoute,
   RequestsIndexRoute: RequestsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -61,7 +61,7 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
 
   if (isLoading) {
     return (
-      <AppShell title="Request" subtitle="Loading…" fillViewport backTo="/requests" backLabel="Back">
+      <AppShell title="Request" subtitle="Loading…" backTo="/requests" backLabel="Back">
         <DetailPageSkeleton />
       </AppShell>
     );
@@ -69,13 +69,13 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
 
   if (!request) {
     return (
-      <AppShell title="Request" subtitle="Not found" fillViewport backTo="/requests" backLabel="Back">
+      <AppShell title="Request" subtitle="Not found" backTo="/requests" backLabel="Back">
         <EmptyState title="Request not found" />
       </AppShell>
     );
   }
 
-  const canDecide = isDispatcher && request.status === "submitted";
+  const canReject = isDispatcher && request.status === "submitted";
   const canAssign =
     isDispatcher && ["approved", "submitted"].includes(request.status) && !trip;
   const isAssigned = !!(
@@ -135,7 +135,6 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
     <AppShell
       title="Request"
       subtitle={request.reference}
-      fillViewport
       backTo="/requests"
       backLabel="Back"
     >
@@ -146,25 +145,8 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
             <span className="admin-req__pill">{passengerLabel(request.passenger_count)}</span>
             <span className="admin-req__pill">{tripType.label}</span>
           </div>
-          {canDecide && user ? (
+          {canReject && user ? (
             <div className="admin-pending__row shrink-0">
-              <Button
-                type="button"
-                size="sm"
-                className="h-8"
-                disabled={decide.isPending}
-                onClick={() =>
-                  decide.mutate(
-                    { requestId, approve: true, actorId: user.id },
-                    {
-                      onSuccess: () => toast.success("Request approved"),
-                      onError: (e) => toast.error(e.message),
-                    },
-                  )
-                }
-              >
-                Approve
-              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -214,12 +196,6 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
                   ) : (
                     <span>No phone</span>
                   )}
-                  {request.expected_end_at ? (
-                    <span className="inline-flex items-baseline gap-1">
-                      {" "}
-                      · ends <WhenStamp at={request.expected_end_at} />
-                    </span>
-                  ) : null}
                 </p>
               </div>
             </section>
@@ -257,6 +233,22 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
                   {mapEl}
                 </section>
               </div>
+            ) : null}
+          </div>
+
+          <aside className="admin-req__aside" aria-label="Dispatch">
+            {deskLayout && mapEl ? (
+              <section className="admin-req__map-card">
+                <div className="admin-req__map-head">
+                  <p className="admin-req__section-label" style={{ padding: 0, margin: 0 }}>
+                    Live map
+                  </p>
+                  {request.drivers?.full_name ? (
+                    <span className="admin-req__map-sub">{request.drivers.full_name}</span>
+                  ) : null}
+                </div>
+                {mapEl}
+              </section>
             ) : null}
 
             {isAssigned ? (
@@ -336,6 +328,8 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
                   <AssignmentPanel
                     requestId={requestId}
                     passengers={request.passenger_count}
+                    {...(request.journey_date ? { journeyDate: request.journey_date } : {})}
+                    pickupAt={request.pickup_at}
                     expectedEnd={request.expected_end_at ?? request.pickup_at}
                     changeMode
                     initialVehicleId={request.assigned_vehicle_id ?? request.vehicles?.id}
@@ -352,6 +346,8 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
                 <AssignmentPanel
                   requestId={requestId}
                   passengers={request.passenger_count}
+                  {...(request.journey_date ? { journeyDate: request.journey_date } : {})}
+                  pickupAt={request.pickup_at}
                   expectedEnd={request.expected_end_at ?? request.pickup_at}
                   disabled={false}
                 />
@@ -407,23 +403,7 @@ export function AdminRideDetail({ requestId }: { requestId: string }) {
                 ) : null}
               </ul>
             </details>
-          </div>
-
-          {deskLayout && mapEl ? (
-            <aside className="admin-req__aside" aria-label="Live map">
-              <section className="admin-req__map-card">
-                <div className="admin-req__map-head">
-                  <p className="admin-req__section-label" style={{ padding: 0, margin: 0 }}>
-                    Live map
-                  </p>
-                  {request.drivers?.full_name ? (
-                    <span className="admin-req__map-sub">{request.drivers.full_name}</span>
-                  ) : null}
-                </div>
-                {mapEl}
-              </section>
-            </aside>
-          ) : null}
+          </aside>
         </div>
       </div>
     </AppShell>

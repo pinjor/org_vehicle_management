@@ -441,7 +441,30 @@ app.get("/api/requests/:id", async (c) => {
 
 app.post("/api/requests", async (c) => {
   const user = requireUser(c);
-  const input = await c.req.json<Record<string, unknown>>();
+  type CreateRequestInput = {
+    pickupAt?: unknown;
+    expectedEndAt?: unknown;
+    journeyDate?: unknown;
+    requesterId?: unknown;
+    requesterName?: unknown;
+    requesterPhone?: unknown;
+    departmentId?: unknown;
+    costCenter?: unknown;
+    purpose?: unknown;
+    tripType?: unknown;
+    priority?: unknown;
+    requestedCategory?: unknown;
+    passengerCount?: unknown;
+    isRoundTrip?: unknown;
+    returnPickupAt?: unknown;
+    returnExpectedEndAt?: unknown;
+    requiresAc?: unknown;
+    specialRequirements?: unknown;
+    remarks?: unknown;
+    points?: { name: string; address: string; latitude: number | null; longitude: number | null; point_type: string }[];
+    passengers?: { full_name: string; phone: string; passenger_type: string }[];
+  };
+  const input = await c.req.json<CreateRequestInput>();
   const pickupRaw = String(input.pickupAt ?? "");
   const pickupIso = clientDateTimeToIso(pickupRaw);
   const expectedEndIso = clientDateTimeToIso(String(input.expectedEndAt ?? ""));
@@ -487,7 +510,7 @@ app.post("/api/requests", async (c) => {
     ],
   );
   const data = rows[0]!;
-  const points = (input.points as { name: string; address: string; latitude: number | null; longitude: number | null; point_type: string }[]) ?? [];
+  const points = input.points ?? [];
   for (let i = 0; i < points.length; i++) {
     const p = points[i]!;
     await query(
@@ -496,7 +519,7 @@ app.post("/api/requests", async (c) => {
       [data.id, i + 1, p.point_type, p.name, p.address, p.latitude, p.longitude],
     );
   }
-  const passengers = (input.passengers as { full_name: string; phone: string; passenger_type: string }[]) ?? [];
+  const passengers = input.passengers ?? [];
   if (passengers.length > 0) {
     for (let i = 0; i < passengers.length; i++) {
       const p = passengers[i]!;
@@ -516,7 +539,7 @@ app.post("/api/requests", async (c) => {
     }
   }
   await query(
-    `insert into notifications (audience_role, category, title, body, link) values ($1,'request',$2,$3,'/dispatch')`,
+    `insert into notifications (audience_role, category, title, body, link) values ($1,'request',$2,$3,'/trips')`,
     [
       "transport_admin",
       `New vehicle request ${data.reference}`,
@@ -564,6 +587,30 @@ app.post("/api/requests/:id/assign", async (c) => {
     [c.req.param("id"), vehicleId, driverId, user.id],
   );
   return json(c, rows[0]?.assign_request);
+});
+
+/** Drivers/vehicles already assigned on a journey_date (calendar day occupancy). */
+app.get("/api/assignments/busy", async (c) => {
+  requireUser(c);
+  const date = c.req.query("date");
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return c.json({ error: "date=YYYY-MM-DD required" }, 400);
+  }
+  const excludeRequestId = c.req.query("excludeRequestId") || null;
+  const { rows } = await query<{
+    assigned_driver_id: string | null;
+    assigned_vehicle_id: string | null;
+  }>(
+    `select assigned_driver_id, assigned_vehicle_id
+     from vehicle_requests
+     where journey_date = $1::date
+       and status in ('assigned','in_progress')
+       and ($2::uuid is null or id <> $2::uuid)`,
+    [date, excludeRequestId],
+  );
+  const driverIds = [...new Set(rows.map((r) => r.assigned_driver_id).filter(Boolean))] as string[];
+  const vehicleIds = [...new Set(rows.map((r) => r.assigned_vehicle_id).filter(Boolean))] as string[];
+  return json(c, { driverIds, vehicleIds });
 });
 
 app.get("/api/requests/:id/recommendations", async (c) => {
@@ -878,7 +925,7 @@ app.patch("/api/vehicles/:id", async (c) => {
   try {
     await client.query("begin");
     if ("primary_driver_id" in patch) {
-      const driverId = patch.primary_driver_id ? String(patch.primary_driver_id) : null;
+      const driverId = patch["primary_driver_id"] ? String(patch["primary_driver_id"]) : null;
       if (driverId) {
         await client.query(
           `update vehicles set primary_driver_id = null where primary_driver_id = $1 and id <> $2`,
@@ -1054,8 +1101,8 @@ app.patch("/api/drivers/:id", async (c) => {
   const driverId = c.req.param("id");
   const primaryVehicleId =
     "primary_vehicle_id" in patch
-      ? patch.primary_vehicle_id
-        ? String(patch.primary_vehicle_id)
+      ? patch["primary_vehicle_id"]
+        ? String(patch["primary_vehicle_id"])
         : null
       : undefined;
   // Categories come from primary vehicle — ignore client toggles
@@ -1078,10 +1125,10 @@ app.patch("/api/drivers/:id", async (c) => {
           [primaryVehicleId],
         );
         if (veh[0]?.category) {
-          driverPatch.allowed_categories = [veh[0].category];
+          driverPatch["allowed_categories"] = [veh[0].category];
         }
       } else {
-        driverPatch.allowed_categories = [];
+        driverPatch["allowed_categories"] = [];
       }
     }
 
@@ -1345,7 +1392,14 @@ app.get("/api/unavailability", async (c) => {
 app.post("/api/unavailability", async (c) => {
   const user = requireUser(c);
   if (!isDispatcher(user.roles)) throw new Error("Not authorised");
-  const input = await c.req.json<Record<string, unknown>>();
+  const input = await c.req.json<{
+    vehicleId: unknown;
+    driverId?: unknown;
+    tripId?: unknown;
+    reason: unknown;
+    description?: unknown;
+    severity: unknown;
+  }>();
   await query(
     `insert into vehicle_unavailability_requests (vehicle_id, driver_id, trip_id, reason, description, severity, created_by)
      values ($1,$2,$3,$4,$5,$6,$7)`,

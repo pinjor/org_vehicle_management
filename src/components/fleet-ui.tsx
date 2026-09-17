@@ -147,14 +147,20 @@ export function FilterBar({
   onChange,
   options,
   label = "Filter",
+  className,
 }: {
   value: string;
   onChange: (value: string) => void;
   options: FilterBarOption[];
   label?: string;
+  className?: string;
 }) {
   return (
-    <div className="flex min-w-0 max-w-full flex-wrap gap-1.5" role="tablist" aria-label={label}>
+    <div
+      className={cn("flex min-w-0 max-w-full flex-wrap gap-1.5", className)}
+      role="tablist"
+      aria-label={label}
+    >
       {options.map((o) => (
         <FilterChip
           key={o.value}
@@ -199,19 +205,22 @@ export function KpiCard({
   hint,
   tone = "neutral",
   icon,
+  compact,
 }: {
   label: string;
   value: ReactNode;
   hint?: string;
   tone?: Tone;
   icon?: ReactNode;
+  /** Single-row strip — less height for list-heavy pages */
+  compact?: boolean;
 }) {
   return (
-    <div className={cn("kpi-card", `kpi-card--${tone}`)}>
+    <div className={cn("kpi-card", `kpi-card--${tone}`, compact && "kpi-card--compact")}>
       <div className="kpi-card__top">
         <div className="kpi-card__copy">
           <p className="kpi-card__label">{label}</p>
-          {hint && <p className="kpi-card__hint">{hint}</p>}
+          {hint && !compact ? <p className="kpi-card__hint">{hint}</p> : null}
         </div>
         {icon && (
           <span className={cn("kpi-card__icon", KPI_ICON_RING[tone])} aria-hidden>
@@ -241,7 +250,7 @@ export function Panel({
   scrollBody,
 }: {
   title?: string;
-  description?: string;
+  description?: string | undefined;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
@@ -528,7 +537,7 @@ export function EntityProfileLink({
   to: "/drivers/$driverId" | "/fleet/$vehicleId";
   params: { driverId: string } | { vehicleId: string };
   label: string;
-  hint?: string;
+  hint?: string | undefined;
 }) {
   return (
     <Link

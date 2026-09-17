@@ -294,7 +294,7 @@ function OpsProfile({ profile }: { profile: ProfileRow }) {
 
   return (
     <AppShell title="Profile" subtitle="Account details and contact information">
-      <form onSubmit={form.save} className="role-dashboard page-stack mx-auto w-full max-w-2xl">
+      <form onSubmit={form.save} className="role-dashboard page-stack w-full min-w-0 max-w-5xl">
         <Panel title="Account" description="Roles and personal details" tone="primary" compact bodyClassName="profile-panel-body">
           <div className="mb-3">
             <ChipGroup>

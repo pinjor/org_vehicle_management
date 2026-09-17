@@ -159,7 +159,7 @@ export function PlaceMapPicker({
       pin={pin}
       busy={busy}
       onConfirm={() => void confirm()}
-      onCancel={isPanel ? () => onOpenChange(false) : undefined}
+      {...(isPanel ? { onCancel: () => onOpenChange(false) } : {})}
     />
   );
 

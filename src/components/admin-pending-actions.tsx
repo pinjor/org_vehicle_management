@@ -54,7 +54,10 @@ export function AdminPendingActions({
         <Button
           type="button"
           size="sm"
-          className={cn(layout === "foot" && "admin-pending__btn", "min-h-10 w-full")}
+          className={cn(
+            layout === "foot" && "admin-pending__btn min-h-10 w-full",
+            layout === "row" && "h-8 whitespace-nowrap",
+          )}
           onClick={(e) => {
             stop(e);
             setAssignOpen(true);
@@ -75,6 +78,8 @@ export function AdminPendingActions({
           <AssignmentPanel
             requestId={request.id}
             passengers={request.passenger_count}
+            {...(request.journey_date ? { journeyDate: request.journey_date } : {})}
+            pickupAt={request.pickup_at}
             {...(request.expected_end_at ? { expectedEnd: request.expected_end_at } : {})}
             onAssigned={() => setAssignOpen(false)}
           />

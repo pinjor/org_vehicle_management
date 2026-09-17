@@ -22,7 +22,7 @@ function HomeIllustration({
 }: {
   html: string;
   stageClass: string;
-  className?: string;
+  className?: string | undefined;
 }) {
   return (
     <div className={cn("emp-home-way", className)} aria-hidden>

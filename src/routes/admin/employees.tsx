@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { PanelSkeleton } from "@/components/loading-skeletons";
 import { AppShell } from "@/components/app-shell";
-import { EmptyState, FilterBar, KpiCard, KpiGrid, ListLink, MetaChip, Panel, StatusChip } from "@/components/fleet-ui";
+import { EmptyState, FilterBar, KpiCard, KpiGrid, MetaChip, Panel, StatusChip } from "@/components/fleet-ui";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
 import { formatBdPhone } from "@/lib/phone";
@@ -70,18 +70,19 @@ function AdminEmployeesPage() {
         </KpiGrid>
 
         <Panel tone="primary" compact className="min-w-0" bodyClassName="min-w-0 p-0">
-          <div className="space-y-2.5 border-b border-border p-3 sm:p-3.5">
+          <div className="list-toolbar border-b border-border p-3 sm:p-3.5">
             <FilterBar
               label="Filter by status"
               value={statusFilter}
               onChange={(v) => setStatusFilter(v as typeof statusFilter)}
               options={statusFilterOptions}
+              className="list-toolbar__tabs flex-nowrap overflow-x-auto"
             />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search name, phone, dept, code…"
-              className="h-9"
+              className="list-toolbar__search"
             />
           </div>
 
@@ -100,7 +101,11 @@ function AdminEmployeesPage() {
                   return (
                     <li key={e.roster_id}>
                       {e.profile_id ? (
-                        <ListLink to="/admin/employees/$employeeId" params={{ employeeId: e.profile_id }}>
+                        <Link
+                          to="/admin/employees/$employeeId"
+                          params={{ employeeId: e.profile_id }}
+                          className="flex flex-col gap-1.5 px-3 py-2.5 transition-colors hover:bg-primary/6 active:bg-surface-2 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-3"
+                        >
                           <div className="min-w-0">
                             <p className="font-medium">{name}</p>
                             <p className="text-xs text-muted-foreground">
@@ -112,7 +117,7 @@ function AdminEmployeesPage() {
                             <StatusChip label={`${e.request_count} req`} tone="info" dot={false} />
                             <StatusChip label="Active" tone="success" />
                           </div>
-                        </ListLink>
+                        </Link>
                       ) : (
                         <div className="flex items-center justify-between gap-2 px-3 py-2">
                           <div className="min-w-0">

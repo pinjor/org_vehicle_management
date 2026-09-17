@@ -46,7 +46,7 @@ export function formatPickupLabel(iso: string) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString(undefined, {
-    weekday: "short",
+    weekday: "long",
     month: "short",
     day: "numeric",
     hour: "numeric",

@@ -1,30 +1,26 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
-  Check,
-  ChevronDown,
-  Clock,
   LocateFixed,
   MapPin,
   Plus,
   Star,
-  Users,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PlaceMapPicker } from "@/components/place-map-picker";
-import { PlanRideChooser } from "@/components/plan-ride-chooser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
-import { toLocalInput, localInputToIso } from "@/lib/fleet";
+import { toLocalInput, localInputToIso, passengerLabel } from "@/lib/fleet";
 import { useIsDesktopLg } from "@/hooks/use-desktop-lg";
 import { useLookupOptions } from "@/lib/lookups-context";
 import { reverseGeocode, searchPlaces, type NominatimResult } from "@/lib/osm";
 import { normalizeBdPhone } from "@/lib/phone";
 import { useCreateRequest, useLocations } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { routeLineCompact } from "@/lib/route-summary";
 
 type SavedLocation = {
   id: string;
@@ -90,21 +86,6 @@ function endAtFromPickup(pickupAt: string, hours = 2): string {
   return toLocalInput(new Date(d.getTime() + hours * 3600_000));
 }
 
-function formatPickupLabel(pickupAt: string): string {
-  const d = new Date(pickupAt);
-  if (Number.isNaN(d.getTime())) return "Schedule";
-  const now = new Date();
-  const diffMin = (d.getTime() - now.getTime()) / 60_000;
-  if (diffMin >= -5 && diffMin <= 45) return "Pickup soon";
-  return d.toLocaleString("en-US", {
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
-
 function applySearchResult(result: NominatimResult, fallbackName: string) {
   const lat = Number(result.lat);
   const lng = Number(result.lon);
@@ -129,7 +110,7 @@ async function resolveStopCoords(stop: RouteStopDraft): Promise<RouteStopDraft> 
 }
 
 /** Employee new request — Plan your ride (light). */
-export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string }) {
+export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string | undefined }) {
   const { user, profile, session, loading } = useAuth();
   const navigate = useNavigate();
   const locations = useLocations();
@@ -149,27 +130,61 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
   const [pickup, setPickup] = useState(newStop());
   const [drop, setDrop] = useState(newStop());
   const [stops, setStops] = useState<RouteStopDraft[]>([]);
-  const [focus, setFocus] = useState<FocusField>("pickup");
+  const [focus, setFocus] = useState<FocusField>(null);
   const [filter, setFilter] = useState("");
-  const [timeOpen, setTimeOpen] = useState(false);
-  const [paxOpen, setPaxOpen] = useState(false);
-  const [tripOpen, setTripOpen] = useState(false);
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dropSeeded, setDropSeeded] = useState(false);
   const [locating, setLocating] = useState(false);
   const [searchResults, setSearchResults] = useState<NominatimResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [metaStep, setMetaStep] = useState<"date" | "time" | "pax" | "trip" | "done">("date");
+
+  const dateRef = useRef<HTMLInputElement>(null);
+  const timeRef = useRef<HTMLInputElement>(null);
+  const paxRef = useRef<HTMLDivElement>(null);
+  const tripRef = useRef<HTMLSelectElement>(null);
 
   const savedLocations = (locations.data ?? []) as SavedLocation[];
+
+  function openMetaPicker(el: HTMLInputElement | null) {
+    if (!el) return;
+    el.focus();
+    try {
+      el.showPicker?.();
+    } catch {
+      /* showPicker can throw outside a user gesture in some browsers */
+    }
+  }
+
+  useEffect(() => {
+    const t = window.setTimeout(() => openMetaPicker(dateRef.current), 60);
+    return () => clearTimeout(t);
+  }, []);
+
+  function advanceMeta(from: "date" | "time" | "pax" | "trip") {
+    if (from === "date") {
+      setMetaStep("time");
+      window.setTimeout(() => openMetaPicker(timeRef.current), 80);
+      return;
+    }
+    if (from === "time") {
+      setMetaStep("pax");
+      return;
+    }
+    if (from === "pax") {
+      setMetaStep("trip");
+      return;
+    }
+    setMetaStep("done");
+    setFocus((f) => f ?? "pickup");
+  }
 
   useEffect(() => {
     if (dropSeeded || !initialDropId || !savedLocations.length) return;
     const loc = savedLocations.find((l) => l.id === initialDropId);
     if (!loc) return;
     setDrop({ id: draftId(), ...applyLoc(loc) });
-    setFocus("pickup");
-    setFilter("");
     setDropSeeded(true);
   }, [initialDropId, savedLocations, dropSeeded]);
 
@@ -230,6 +245,19 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
 
   /** Hide saved/search lists once route is set — show again only while typing/editing. */
   const showSuggest = isSearching || !placesReady;
+
+  const tripTypeLabel =
+    tripTypes.find((t) => t.value_key === tripCategory)?.label ?? tripCategory;
+  const routePreview =
+    routeLineCompact([
+      { name: pickup.name, sequence: 0, point_type: "pickup" },
+      ...stops.map((s, i) => ({
+        name: s.name,
+        sequence: i + 1,
+        point_type: "stop",
+      })),
+      { name: drop.name, sequence: stops.length + 1, point_type: "destination" },
+    ]) || null;
 
   function applyPlace(
     field: FocusField,
@@ -379,6 +407,14 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
             lng,
           });
           setFilter("");
+          setMetaStep("done");
+          // Advance to next place field after filling pickup
+          if (tripCategory === "multi_stop" || stops.length > 0) {
+            const emptyStopIdx = stops.findIndex((s) => !s.name.trim());
+            setFocus(emptyStopIdx >= 0 ? `stop-${emptyStopIdx}` : "drop");
+          } else {
+            setFocus("drop");
+          }
           setLocating(false);
           toast.success("Pickup set from your location");
         })();
@@ -512,10 +548,6 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
     }
   }
 
-  const tripLabel =
-    tripTypes.find((t) => t.value_key === tripCategory)?.label ??
-    (isMulti ? "Multi-stop" : isRound ? "Round trip" : "One way");
-
   return (
     <div className="plan-ride">
       <header className="plan-ride__top">
@@ -528,101 +560,121 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
 
       <div className="plan-ride__body">
         <div className="plan-ride__form">
-          {isDesktop ? (
-            <div className="plan-ride__meta-desk" aria-label="Ride options">
-              <label className="plan-ride__meta-field">
-                <span className="plan-ride__meta-label">Date</span>
-                <Input
-                  type="date"
-                  value={pickupAt.slice(0, 10)}
-                  onChange={(e) => {
-                    const date = e.target.value || pickupAt.slice(0, 10);
-                    const time = pickupAt.slice(11, 16) || "09:00";
-                    setPickupAt(`${date}T${time}`);
-                  }}
-                  className="plan-ride__meta-input"
-                />
-              </label>
-              <label className="plan-ride__meta-field">
-                <span className="plan-ride__meta-label">Time</span>
-                <Input
-                  type="time"
-                  value={pickupAt.slice(11, 16) || "09:00"}
-                  onChange={(e) => {
-                    const date = pickupAt.slice(0, 10) || toLocalInput(new Date()).slice(0, 10);
-                    const time = e.target.value || "09:00";
-                    setPickupAt(`${date}T${time}`);
-                  }}
-                  className="plan-ride__meta-input"
-                />
-              </label>
-              <div className="plan-ride__meta-field plan-ride__meta-field--pax">
-                <span className="plan-ride__meta-label">Passengers</span>
-                <div className="plan-ride__meta-stepper" role="group" aria-label="Passenger count">
-                  <button
-                    type="button"
-                    className="plan-ride__meta-step"
-                    aria-label="Fewer passengers"
-                    disabled={passengerCount <= 1}
-                    onClick={() => setPassengerCount((n) => Math.max(1, n - 1))}
-                  >
-                    −
-                  </button>
-                  <span className="plan-ride__meta-step-val">{passengerCount}</span>
-                  <button
-                    type="button"
-                    className="plan-ride__meta-step"
-                    aria-label="More passengers"
-                    disabled={passengerCount >= 20}
-                    onClick={() => setPassengerCount((n) => Math.min(20, n + 1))}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-              <label className="plan-ride__meta-field plan-ride__meta-field--trip">
-                <span className="plan-ride__meta-label">Trip type</span>
-                <select
-                  className="plan-ride__meta-select"
-                  value={tripCategory}
-                  onChange={(e) => {
-                    const key = e.target.value;
-                    setTripCategory(key);
-                    if (key === "multi_stop" && stops.length === 0) {
-                      setStops([newStop()]);
-                      setFocus("stop-0");
-                    }
-                    if (key !== "multi_stop") setStops([]);
+          <div className="plan-ride__meta-desk" aria-label="Ride options">
+            <label className="plan-ride__meta-field">
+              <span className="plan-ride__meta-label">Date</span>
+              <Input
+                ref={dateRef}
+                type="date"
+                value={pickupAt.slice(0, 10)}
+                onChange={(e) => {
+                  const date = e.target.value || pickupAt.slice(0, 10);
+                  const time = pickupAt.slice(11, 16) || "09:00";
+                  setPickupAt(`${date}T${time}`);
+                  if (e.target.value) advanceMeta("date");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    advanceMeta("date");
+                  }
+                }}
+                className="plan-ride__meta-input"
+              />
+            </label>
+            <label className="plan-ride__meta-field">
+              <span className="plan-ride__meta-label">Time</span>
+              <Input
+                ref={timeRef}
+                type="time"
+                value={pickupAt.slice(11, 16) || "09:00"}
+                onChange={(e) => {
+                  const date = pickupAt.slice(0, 10) || toLocalInput(new Date()).slice(0, 10);
+                  const time = e.target.value || "09:00";
+                  setPickupAt(`${date}T${time}`);
+                  if (e.target.value) advanceMeta("time");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    advanceMeta("time");
+                  }
+                }}
+                className="plan-ride__meta-input"
+              />
+            </label>
+            <div
+              ref={paxRef}
+              tabIndex={0}
+              className="plan-ride__meta-field plan-ride__meta-field--pax"
+              onKeyDown={(e) => {
+                if (e.key === "ArrowUp" || e.key === "+") {
+                  e.preventDefault();
+                  setPassengerCount((n) => Math.min(20, n + 1));
+                } else if (e.key === "ArrowDown" || e.key === "-") {
+                  e.preventDefault();
+                  setPassengerCount((n) => Math.max(1, n - 1));
+                } else if (e.key === "Enter") {
+                  e.preventDefault();
+                  advanceMeta("pax");
+                }
+              }}
+            >
+              <span className="plan-ride__meta-label">Passengers</span>
+              <div className="plan-ride__meta-stepper" role="group" aria-label="Passenger count">
+                <button
+                  type="button"
+                  className="plan-ride__meta-step"
+                  aria-label="Fewer passengers"
+                  disabled={passengerCount <= 1}
+                  onClick={() => setPassengerCount((n) => Math.max(1, n - 1))}
+                >
+                  −
+                </button>
+                <span className="plan-ride__meta-step-val">{passengerCount}</span>
+                <button
+                  type="button"
+                  className="plan-ride__meta-step"
+                  aria-label="More passengers"
+                  disabled={passengerCount >= 20}
+                  onClick={() => {
+                    setPassengerCount((n) => Math.min(20, n + 1));
                   }}
                 >
-                  {tripTypes.map((opt) => (
-                    <option key={opt.value_key} value={opt.value_key}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  +
+                </button>
+              </div>
             </div>
-          ) : (
-            <div className="plan-ride__pills">
-              <button type="button" className="plan-ride__pill" onClick={() => setTimeOpen(true)}>
-                <Clock className="size-3.5 shrink-0" />
-                <span className="truncate">{formatPickupLabel(pickupAt)}</span>
-                <ChevronDown className="size-3.5 shrink-0 opacity-70" />
-              </button>
-              <button type="button" className="plan-ride__pill" onClick={() => setPaxOpen(true)}>
-                <Users className="size-3.5 shrink-0" />
-                <span className="truncate">
-                  {passengerCount} {passengerCount === 1 ? "passenger" : "passengers"}
-                </span>
-                <ChevronDown className="size-3.5 shrink-0 opacity-70" />
-              </button>
-              <button type="button" className="plan-ride__pill" onClick={() => setTripOpen(true)}>
-                <span className="truncate">{tripLabel}</span>
-                <ChevronDown className="size-3.5 shrink-0 opacity-70" />
-              </button>
-            </div>
-          )}
+            <label className="plan-ride__meta-field plan-ride__meta-field--trip">
+              <span className="plan-ride__meta-label">Trip type</span>
+              <select
+                ref={tripRef}
+                className="plan-ride__meta-select"
+                value={tripCategory}
+                onChange={(e) => {
+                  const key = e.target.value;
+                  setTripCategory(key);
+                  if (key === "multi_stop" && stops.length === 0) {
+                    setStops([newStop()]);
+                  }
+                  if (key !== "multi_stop") setStops([]);
+                  advanceMeta("trip");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    advanceMeta("trip");
+                  }
+                }}
+              >
+                {tripTypes.map((opt) => (
+                  <option key={opt.value_key} value={opt.value_key}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           <div className="plan-ride__route-wrap">
             <div className="plan-ride__route">
@@ -631,8 +683,9 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
                 active={focus === "pickup"}
                 value={pickup.name}
                 placeholder="Pickup location"
-                hint={pickup.address || undefined}
+                {...(pickup.address ? { hint: pickup.address } : {})}
                 onFocus={() => {
+                  setMetaStep("done");
                   setFocus("pickup");
                   setFilter(pickup.name);
                 }}
@@ -656,6 +709,7 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
                     value={stop.name}
                     placeholder={`Stop ${index + 1}`}
                     onFocus={() => {
+                      setMetaStep("done");
                       setFocus(`stop-${index}`);
                       setFilter(stop.name);
                     }}
@@ -684,8 +738,9 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
                 active={focus === "drop"}
                 value={drop.name}
                 placeholder="Where to?"
-                hint={drop.address || undefined}
+                {...(drop.address ? { hint: drop.address } : {})}
                 onFocus={() => {
+                  setMetaStep("done");
                   setFocus("drop");
                   setFilter(drop.name);
                 }}
@@ -848,118 +903,123 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
           </div>
         </div>
 
-        <aside className="plan-ride__aside">
-          {isDesktop && mapPickerOpen ? (
-            <section className="plan-ride__map-card" aria-label="Set place on map">
-              <PlaceMapPicker
-                variant="panel"
-                open={mapPickerOpen}
-                onOpenChange={setMapPickerOpen}
-                title={mapPickerTitle()}
-                tone={mapPickerTone()}
-                initialLat={mapPickerSeed().lat}
-                initialLng={mapPickerSeed().lng}
-                onConfirm={confirmMapPick}
-              />
+        <aside className="plan-ride__aside" aria-label="Trip summary">
+          {isDesktop ? (
+            <section className="plan-ride__summary-card">
+              <header className="plan-ride__summary-head">
+                <p className="plan-ride__aside-label">Trip summary</p>
+                <span className="plan-ride__summary-glow" aria-hidden />
+              </header>
+              {!pickup.name.trim() &&
+              !drop.name.trim() &&
+              !purpose.trim() &&
+              stops.every((s) => !s.name.trim()) ? (
+                <p className="plan-ride__summary-empty">
+                  Details appear here as you fill the form.
+                </p>
+              ) : null}
+              <div className="plan-ride__summary-chips">
+                <div className="plan-ride__summary-chip plan-ride__summary-chip--when plan-ride__summary-row--in">
+                  <span className="plan-ride__summary-chip-k">When</span>
+                  <span className="plan-ride__summary-chip-v">
+                    {pickupAt.slice(0, 10)} · {pickupAt.slice(11, 16) || "09:00"}
+                  </span>
+                </div>
+                <div className="plan-ride__summary-chip plan-ride__summary-chip--pax plan-ride__summary-row--in">
+                  <span className="plan-ride__summary-chip-k">Passengers</span>
+                  <span className="plan-ride__summary-chip-v">
+                    {passengerLabel(passengerCount)}
+                  </span>
+                </div>
+                <div className="plan-ride__summary-chip plan-ride__summary-chip--type plan-ride__summary-row--in">
+                  <span className="plan-ride__summary-chip-k">Type</span>
+                  <span className="plan-ride__summary-chip-v">{tripTypeLabel}</span>
+                </div>
+              </div>
+              {(pickup.name.trim() ||
+                drop.name.trim() ||
+                stops.some((s) => s.name.trim())) && (
+                <ol className="plan-ride__summary-route">
+                  {pickup.name.trim() ? (
+                    <li className="plan-ride__summary-stop plan-ride__summary-stop--pickup plan-ride__summary-row--in">
+                      <span className="plan-ride__summary-dot" aria-hidden />
+                      <div className="plan-ride__summary-stop-copy">
+                        <span className="plan-ride__summary-stop-k">Pickup</span>
+                        <span
+                          className="plan-ride__summary-stop-v"
+                          title={pickup.address || pickup.name}
+                        >
+                          {pickup.name}
+                        </span>
+                      </div>
+                    </li>
+                  ) : null}
+                  {stops
+                    .filter((s) => s.name.trim())
+                    .map((s, i) => (
+                      <li
+                        key={s.id}
+                        className="plan-ride__summary-stop plan-ride__summary-stop--mid plan-ride__summary-row--in"
+                      >
+                        <span className="plan-ride__summary-dot" aria-hidden />
+                        <div className="plan-ride__summary-stop-copy">
+                          <span className="plan-ride__summary-stop-k">
+                            Stop {i + 1}
+                          </span>
+                          <span
+                            className="plan-ride__summary-stop-v"
+                            title={s.address || s.name}
+                          >
+                            {s.name}
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  {drop.name.trim() ? (
+                    <li className="plan-ride__summary-stop plan-ride__summary-stop--drop plan-ride__summary-row--in">
+                      <span className="plan-ride__summary-dot" aria-hidden />
+                      <div className="plan-ride__summary-stop-copy">
+                        <span className="plan-ride__summary-stop-k">Drop-off</span>
+                        <span
+                          className="plan-ride__summary-stop-v"
+                          title={drop.address || drop.name}
+                        >
+                          {drop.name}
+                        </span>
+                      </div>
+                    </li>
+                  ) : null}
+                </ol>
+              )}
+              {routePreview && pickup.name.trim() && drop.name.trim() ? (
+                <p
+                  className="plan-ride__summary-line plan-ride__summary-row--in"
+                  title={routePreview}
+                >
+                  {routePreview}
+                </p>
+              ) : null}
+              {purpose.trim() ? (
+                <div className="plan-ride__summary-purpose plan-ride__summary-row--in">
+                  <span className="plan-ride__summary-chip-k">Purpose</span>
+                  <span className="plan-ride__summary-purpose-v">{purpose.trim()}</span>
+                </div>
+              ) : null}
             </section>
           ) : null}
         </aside>
       </div>
 
-      {!isDesktop ? (
-        <PlaceMapPicker
-          variant="sheet"
-          open={mapPickerOpen}
-          onOpenChange={setMapPickerOpen}
-          title={mapPickerTitle()}
-          tone={mapPickerTone()}
-          initialLat={mapPickerSeed().lat}
-          initialLng={mapPickerSeed().lng}
-          onConfirm={confirmMapPick}
-        />
-      ) : null}
-
-      {!isDesktop ? (
-        <>
-          <PlanRideChooser open={timeOpen} onOpenChange={setTimeOpen} title="Pickup time">
-            <div className="space-y-3">
-              <div className="plan-ride-sheet__time-row">
-                <Input
-                  type="date"
-                  value={pickupAt.slice(0, 10)}
-                  onChange={(e) => {
-                    const date = e.target.value || pickupAt.slice(0, 10);
-                    const time = pickupAt.slice(11, 16) || "09:00";
-                    setPickupAt(`${date}T${time}`);
-                  }}
-                  className="plan-ride-sheet__input"
-                  aria-label="Pickup date"
-                />
-                <Input
-                  type="time"
-                  value={pickupAt.slice(11, 16) || "09:00"}
-                  onChange={(e) => {
-                    const date = pickupAt.slice(0, 10) || toLocalInput(new Date()).slice(0, 10);
-                    const time = e.target.value || "09:00";
-                    setPickupAt(`${date}T${time}`);
-                  }}
-                  className="plan-ride-sheet__input"
-                  aria-label="Pickup time"
-                />
-              </div>
-              <Button type="button" className="w-full" onClick={() => setTimeOpen(false)}>
-                Done
-              </Button>
-            </div>
-          </PlanRideChooser>
-
-          <PlanRideChooser open={paxOpen} onOpenChange={setPaxOpen} title="Passengers">
-            <div className="flex flex-wrap gap-2">
-              {[1, 2, 3, 4, 5, 6, 8, 10, 12].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  className={cn("plan-ride-sheet__chip", passengerCount === n && "is-active")}
-                  onClick={() => {
-                    setPassengerCount(n);
-                    setPaxOpen(false);
-                  }}
-                >
-                  {n}
-                  {passengerCount === n ? <Check className="size-3.5" /> : null}
-                </button>
-              ))}
-            </div>
-          </PlanRideChooser>
-
-          <PlanRideChooser open={tripOpen} onOpenChange={setTripOpen} title="Trip type">
-            <div className="space-y-1">
-              {tripTypes.map((opt) => {
-                const active = tripCategory === opt.value_key;
-                return (
-                  <button
-                    key={opt.value_key}
-                    type="button"
-                    className={cn("plan-ride-sheet__option", active && "is-active")}
-                    onClick={() => {
-                      setTripCategory(opt.value_key);
-                      if (opt.value_key === "multi_stop" && stops.length === 0) {
-                        setStops([newStop()]);
-                        setFocus("stop-0");
-                      }
-                      if (opt.value_key !== "multi_stop") setStops([]);
-                      setTripOpen(false);
-                    }}
-                  >
-                    <span>{opt.label}</span>
-                    {active ? <Check className="size-4" /> : null}
-                  </button>
-                );
-              })}
-            </div>
-          </PlanRideChooser>
-        </>
-      ) : null}
+      <PlaceMapPicker
+        variant="sheet"
+        open={mapPickerOpen}
+        onOpenChange={setMapPickerOpen}
+        title={mapPickerTitle()}
+        tone={mapPickerTone()}
+        initialLat={mapPickerSeed().lat}
+        initialLng={mapPickerSeed().lng}
+        onConfirm={confirmMapPick}
+      />
     </div>
   );
 }

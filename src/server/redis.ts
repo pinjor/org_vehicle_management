@@ -1,6 +1,6 @@
 import { createClient, type RedisClientType } from "redis";
 
-const REDIS_URL = process.env.REDIS_URL;
+const REDIS_URL = process.env["REDIS_URL"];
 const CACHE_KEYS = {
   lookups: "fleetops:lookups",
   departments: "fleetops:departments",

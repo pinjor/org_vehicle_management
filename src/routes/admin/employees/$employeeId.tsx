@@ -96,13 +96,12 @@ function EmployeeProfilePage() {
                 <ListRow key={r.id}>
                   <TripListRow
                     when={r.pickup_at}
-                    title={routeLineCompact(r.request_route_points) || r.purpose || r.reference}
+                    title={routeLineCompact(r.request_route_points) || r.purpose || "Request"}
                     subtitle={[
                       r.purpose && routeLineCompact(r.request_route_points) ? r.purpose : null,
                       r.drivers?.full_name ? `Driver ${r.drivers.full_name}` : null,
                       r.vehicles?.registration_number,
                       passengerLabel(r.passenger_count),
-                      r.reference,
                     ]
                       .filter(Boolean)
                       .join(" · ")}

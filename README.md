@@ -60,8 +60,7 @@ Auth is **Bangladesh phone + password** (roster-gated signup). Drivers default U
 | `/dashboard` | Role home |
 | `/requests`, `/requests/new`, `/requests/$id` | Employee (+ admin view) |
 | `/my-trips`, `/my-trips/$tripId` | Driver list + trip detail (map, pathway, actions) |
-| `/dispatch` | Incoming queue, vehicles, live trips |
-| `/trips` | Admin trip history (completed / live / cancelled / all) |
+| `/trips` | Admin: KPIs + pending queue, live, completed trips (`/dispatch` redirects here) |
 | `/fleet`, `/drivers`, `/maintenance` | Ops |
 | `/profile` | Account (driver layout includes language) |
 | `/admin/*` | Roster, employees, settings |
@@ -72,7 +71,7 @@ Auth is **Bangladesh phone + password** (roster-gated signup). Drivers default U
 - Ranked vehicle+driver recommendations + assignment
 - Full trip state machine (`advance_trip`) with GPS pings + live map pathway
 - Driver portal: preview cards → trip detail; in-app Navigate (no OSM redirect)
-- Admin: dispatch console + completed trip history
+- Admin: trips board (KPIs + pending/live/completed)
 - Shared status screens for load errors / 404
 - Configurable lookups (statuses, categories, etc.)
 

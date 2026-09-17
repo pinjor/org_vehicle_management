@@ -102,7 +102,7 @@ const CLOSED_TRIP = new Set(["completed", "cancelled", "breakdown"]);
 
 /** All-requests / history lists: open first, closed last; newest first inside each. */
 export function sortRequestsList<
-  T extends { status: string; pickup_at?: string | null; created_at: string },
+  T extends { status: string; pickup_at?: string | null; created_at?: string },
 >(rows: T[]): T[] {
   return [...rows].sort((a, b) => {
     const pa = CLOSED_REQUEST.has(a.status) ? 1 : 0;
@@ -307,11 +307,11 @@ export function nextDriverActions(
 ): { action: string; label: string; primary?: boolean; hint?: string }[] {
   switch (status) {
     case "driver_assigned":
-      return [{ action: "confirm", label: "Confirm assignment", primary: true, hint: "Accept this trip and notify dispatch you're ready" }];
+      return [{ action: "confirm", label: "Confirm assignment", primary: true, hint: "Accept this trip and mark yourself ready" }];
     case "driver_confirmed":
       return [{ action: "head_to_pickup", label: "Start heading to pickup", primary: true, hint: "Mark that you're driving to the pickup location" }];
     case "heading_to_pickup":
-      return [{ action: "arrive_pickup", label: "I have arrived", primary: true, hint: "Tell dispatch you've reached the pickup point" }];
+      return [{ action: "arrive_pickup", label: "I have arrived", primary: true, hint: "Confirm you've reached the pickup point" }];
     case "arrived_pickup":
       return [{ action: "confirm_pickup", label: "Confirm passenger pickup", primary: true, hint: "Passengers are onboard — start the journey" }];
     case "passenger_picked_up":
@@ -383,13 +383,13 @@ export function simplifiedDriverCta(status: string): SimplifiedDriverCta | null 
 export function formatTime(value?: string | null) {
   if (!value) return "—";
   return new Date(value).toLocaleTimeString("en-US", {
-    hour: "numeric",
+    hour: "2-digit",
     minute: "2-digit",
     hour12: true,
   });
 }
 
-/** Short weekday for trip cards — Mon, Tue, … */
+/** Full weekday for trip cards — Monday, Tuesday, … */
 export function formatWeekday(value?: string | null) {
   if (!value) return "";
   const d = new Date(value);

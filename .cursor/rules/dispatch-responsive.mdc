@@ -1,0 +1,20 @@
+---
+description: Dispatch UX — assign implies approve; always build responsive UI
+alwaysApply: true
+---
+
+# Fleet ops product rules
+
+## Assign = approve
+
+- Transport admin does **not** get a separate **Approve** button on requests.
+- Assigning a driver/vehicle from `submitted` (or `approved`) is the approval — `assign_request` already sets `approved_by` / `approved_at`.
+- Keep **Reject** where needed. Keep **Assign driver** on pending cards / request detail.
+- Do not reintroduce Approve CTAs on admin request alert, pending cards, dispatch, trips, or ride detail.
+
+## Responsive by default
+
+- Every UI change must work on mobile and desktop (sm / md / lg breakpoints already in `styles.css`).
+- Prefer page scroll over nested `overflow: hidden` traps unless a panel truly needs its own scroll.
+- Avoid fixed heights that clip content on small viewports; use `min-h-0`, `minmax(0, …)`, wrap, and fluid grids.
+- Test mental model: phone first, then `lg` desk layouts (side map, two columns).

@@ -32,7 +32,7 @@ const DEMO_USERS = [
     id: "admin",
     role: "Transport Admin",
     name: "Transport Admin",
-    detail: "Dispatch, fleet & maintenance",
+    detail: "Trips, fleet & maintenance",
     phone: "1711000001",
     password: "admin123",
   },
@@ -246,10 +246,6 @@ function AuthPage() {
                     ))}
                   </ul>
                 </div>
-
-                <p className="text-center text-sm text-[color:var(--auth-muted)]">
-                  Must be on the admin roster before you can access Vehicle Management System.
-                </p>
               </form>
             ) : (
               <form onSubmit={createAccount} className="auth-form-stack">

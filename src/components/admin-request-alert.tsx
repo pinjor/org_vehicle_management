@@ -47,7 +47,6 @@ export function AdminRequestAlert() {
           onClick: () => setPopup(r),
         },
       });
-      setPopup(r);
     }
   }, [data, isDispatcher]);
 
@@ -106,9 +105,10 @@ export function AdminRequestAlert() {
               <AssignmentPanel
                 requestId={popup.id}
                 passengers={popup.passenger_count}
+                {...(popup.journey_date ? { journeyDate: popup.journey_date } : {})}
+                pickupAt={popup.pickup_at}
                 {...(popup.expected_end_at ? { expectedEnd: popup.expected_end_at } : {})}
                 onAssigned={() => {
-                  toast.success("Assigned");
                   setPopup(null);
                 }}
               />

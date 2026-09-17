@@ -46,6 +46,15 @@ function FleetPage() {
   const create = useCreateVehicle();
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+
+  if (!isDispatcher) {
+    return (
+      <AppShell title="Fleet" subtitle="Admin only">
+        <EmptyState compact title="Not available" description="Fleet register is for transport admin." />
+      </AppShell>
+    );
+  }
+
   const emptyForm = {
     fleet_number: "",
     registration_number: "",

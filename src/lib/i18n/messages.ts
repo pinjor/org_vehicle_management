@@ -27,7 +27,7 @@ export const en = {
   "driver.home.fallbackName": "Driver",
   "driver.home.subtitle": "Your trips",
   "driver.home.ctaTitle": "No trip assigned",
-  "driver.home.ctaDesc": "When dispatch assigns you, it shows here.",
+  "driver.home.ctaDesc": "When a trip is assigned, it shows here.",
   "driver.home.myTrips": "My trips",
   "driver.home.myTripsTip": "See all trips",
   "driver.home.incoming": "Next trip",

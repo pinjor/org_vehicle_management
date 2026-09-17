@@ -31,7 +31,7 @@ drop function if exists public.assign_request(uuid, uuid, uuid, uuid);
 
 create or replace function public.assign_request(_request_id uuid, _vehicle_id uuid, _driver_id uuid, _actor uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare r public.vehicle_requests%rowtype; win tstzrange; conflict_ref text; v public.vehicles%rowtype; d public.drivers%rowtype; t public.trips%rowtype; actor uuid;
+declare r public.vehicle_requests%rowtype; v public.vehicles%rowtype; d public.drivers%rowtype; t public.trips%rowtype; actor uuid; conflict_ref text;
 begin
   actor := _actor;
   if actor is null then raise exception 'Authentication required'; end if;
@@ -48,17 +48,16 @@ begin
   if d.current_status in ('leave','off_duty','unavailable','suspended') then raise exception 'Driver is %', d.current_status; end if;
   if d.license_expiry is not null and d.license_expiry <= r.journey_date then raise exception 'Driver licence expired'; end if;
 
-  win := public.request_window(r.pickup_at, coalesce(r.return_expected_end_at, r.expected_end_at));
-
+  -- Occupancy by calendar journey_date: one active assignment per driver/vehicle per day.
   select o.reference into conflict_ref from public.vehicle_requests o
    where o.id <> r.id and o.assigned_vehicle_id = _vehicle_id and o.status in ('assigned','in_progress')
-     and public.request_window(o.pickup_at, coalesce(o.return_expected_end_at, o.expected_end_at)) && win limit 1;
-  if conflict_ref is not null then raise exception 'Vehicle already booked on % for an overlapping window', conflict_ref; end if;
+     and o.journey_date = r.journey_date limit 1;
+  if conflict_ref is not null then raise exception 'Vehicle already assigned on % (%)', r.journey_date, conflict_ref; end if;
 
   select o.reference into conflict_ref from public.vehicle_requests o
    where o.id <> r.id and o.assigned_driver_id = _driver_id and o.status in ('assigned','in_progress')
-     and public.request_window(o.pickup_at, coalesce(o.return_expected_end_at, o.expected_end_at)) && win limit 1;
-  if conflict_ref is not null then raise exception 'Driver already booked on % for an overlapping window', conflict_ref; end if;
+     and o.journey_date = r.journey_date limit 1;
+  if conflict_ref is not null then raise exception 'Driver already assigned on % (%)', r.journey_date, conflict_ref; end if;
 
   -- Free previous pairing when re-assigning
   if r.assigned_vehicle_id is not null and r.assigned_vehicle_id is distinct from _vehicle_id then
@@ -106,11 +105,10 @@ $$;
 -- Recommendations: only vehicle ↔ primary-driver pairs (no cross-join any×any)
 create or replace function public.get_recommendations(_request_id uuid)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
-declare r public.vehicle_requests%rowtype; win tstzrange; res jsonb;
+declare r public.vehicle_requests%rowtype; res jsonb;
 begin
   select * into r from public.vehicle_requests where id = _request_id;
   if not found then return '[]'::jsonb; end if;
-  win := public.request_window(r.pickup_at, coalesce(r.return_expected_end_at, r.expected_end_at));
 
   with pickup as (
     select latitude lat, longitude lng from public.request_route_points
@@ -123,7 +121,7 @@ begin
       exists (select 1 from public.vehicle_requests o
         where o.assigned_vehicle_id = v.id and o.id <> r.id
           and o.status in ('assigned','in_progress')
-          and public.request_window(o.pickup_at, coalesce(o.return_expected_end_at, o.expected_end_at)) && win) as busy,
+          and o.journey_date = r.journey_date) as busy,
       (select min(o.pickup_at) from public.vehicle_requests o
         where o.assigned_vehicle_id = v.id and o.id <> r.id and o.status in ('assigned','in_progress')
           and o.pickup_at > r.expected_end_at) as next_assignment_at
@@ -135,9 +133,10 @@ begin
       exists (select 1 from public.vehicle_requests o
         where o.assigned_driver_id = d.id and o.id <> r.id
           and o.status in ('assigned','in_progress')
-          and public.request_window(o.pickup_at, coalesce(o.return_expected_end_at, o.expected_end_at)) && win) as busy,
+          and o.journey_date = r.journey_date) as busy,
       (select count(*) from public.vehicle_requests o
-        where o.assigned_driver_id = d.id and o.journey_date = r.journey_date) as trips_today
+        where o.assigned_driver_id = d.id and o.journey_date = r.journey_date
+          and o.status in ('assigned','in_progress')) as trips_today
     from public.drivers d
   ),
   combos as (

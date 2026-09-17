@@ -1,14 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PanelSkeleton } from "@/components/loading-skeletons";
 import { AppShell } from "@/components/app-shell";
-import { TripListRow } from "@/components/info-blocks";
 import { DriverAssignmentCard } from "@/components/list-cards";
 import { EmptyState, Panel } from "@/components/fleet-ui";
-import { LookupChip } from "@/components/lookup-chip";
+import {
+  DualList,
+  DriverTripTableRow,
+  TripListTable,
+} from "@/components/trip-list-table";
 import { useAuth } from "@/lib/auth";
 import { sortTripsList } from "@/lib/fleet";
 import { useI18n } from "@/lib/i18n";
-import { routeLineCompact } from "@/lib/route-summary";
 import { useDriverTrips } from "@/lib/queries";
 
 export const Route = createFileRoute("/my-trips/")({
@@ -22,9 +24,21 @@ export const Route = createFileRoute("/my-trips/")({
 });
 
 function MyTripsPage() {
-  const { driverId, user } = useAuth();
+  const { driverId, user, isDriver, isDispatcher } = useAuth();
   const { t } = useI18n();
   const { data, isLoading } = useDriverTrips(driverId ?? undefined);
+
+  if (!isDriver || isDispatcher) {
+    return (
+      <AppShell title={t("driver.trips.title")} subtitle={t("driver.trips.shellSub")}>
+        <EmptyState
+          compact
+          title="Driver only"
+          description="My trips is for linked driver accounts."
+        />
+      </AppShell>
+    );
+  }
 
   if (!driverId || !user) {
     return (
@@ -60,39 +74,51 @@ function MyTripsPage() {
             <p className="px-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {t("driver.trips.active", { count: trips.length })}
             </p>
-            <ul className="space-y-2">
-              {trips.map((trip, i) => (
-                <li key={trip.id}>
-                  <DriverAssignmentCard trip={trip} emphasize={i === 0} />
-                </li>
-              ))}
-            </ul>
+            <DualList
+              cards={
+                <ul className="space-y-2">
+                  {trips.map((trip, i) => (
+                    <li key={trip.id}>
+                      <DriverAssignmentCard trip={trip} emphasize={i === 0} />
+                    </li>
+                  ))}
+                </ul>
+              }
+              table={
+                <div className="overflow-hidden rounded-lg border border-border">
+                  <TripListTable
+                    headers={["Time", "Passenger", "Route", "Pax", "Status", "Actions"]}
+                  >
+                    {trips.map((trip, i) => (
+                      <DriverTripTableRow key={trip.id} trip={trip} emphasize={i === 0} />
+                    ))}
+                  </TripListTable>
+                </div>
+              }
+            />
           </section>
         )}
 
         {past.length > 0 && (
           <Panel title={t("driver.trips.history")} tone="neutral" compact bodyClassName="p-0">
-            <ul className="divide-y divide-border/60">
-              {past.slice(0, 10).map((trip) => (
-                <li key={trip.id}>
-                  <TripListRow
-                    when={trip.vehicle_requests?.pickup_at ?? trip.created_at}
-                    title={routeLineCompact(trip.vehicle_requests?.request_route_points) ?? trip.reference}
-                    subtitle={
-                      [
-                        trip.vehicle_requests?.requester_name,
-                        trip.vehicles?.registration_number ?? trip.vehicles?.name,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ") || trip.reference
-                    }
-                    end={<LookupChip group="trip_status" value={trip.status} />}
-                    to="/my-trips/$tripId"
-                    params={{ tripId: trip.id }}
-                  />
-                </li>
-              ))}
-            </ul>
+            <DualList
+              cards={
+                <ul className="divide-y divide-border/60">
+                  {past.slice(0, 10).map((trip) => (
+                    <li key={trip.id}>
+                      <DriverAssignmentCard trip={trip} showStatus />
+                    </li>
+                  ))}
+                </ul>
+              }
+              table={
+                <TripListTable headers={["Time", "Passenger", "Route", "Pax", "Status", "Actions"]}>
+                  {past.slice(0, 10).map((trip) => (
+                    <DriverTripTableRow key={trip.id} trip={trip} />
+                  ))}
+                </TripListTable>
+              }
+            />
           </Panel>
         )}
       </div>

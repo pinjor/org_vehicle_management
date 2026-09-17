@@ -47,6 +47,42 @@ function driverInitials(name: string) {
   return `${parts[0]![0] ?? ""}${parts[parts.length - 1]![0] ?? ""}`.toUpperCase();
 }
 
+type DriverFormState = {
+  full_name: string;
+  driver_code: string;
+  email: string;
+  license_number: string;
+  license_type: string;
+  license_expiry: string;
+  experience_years: number;
+  shift: string;
+  current_status: string;
+  blood_group: string;
+  emergency_contact: string;
+  address: string;
+  date_of_joining: string;
+  rating: number;
+  primary_vehicle_id: string;
+};
+
+const EMPTY_DRIVER_FORM: DriverFormState = {
+  full_name: "",
+  driver_code: "",
+  email: "",
+  license_number: "",
+  license_type: "",
+  license_expiry: "",
+  experience_years: 0,
+  shift: "",
+  current_status: "",
+  blood_group: "",
+  emergency_contact: "",
+  address: "",
+  date_of_joining: "",
+  rating: 0,
+  primary_vehicle_id: "",
+};
+
 function DriverProfilePage() {
   const { driverId } = Route.useParams();
   const { isDispatcher, isDriver, isAdmin } = useAuth();
@@ -56,7 +92,7 @@ function DriverProfilePage() {
   const { data: trips } = useDriverTrips(driverId);
   const { data: fleetVehicles } = useVehicles();
   const update = useUpdateDriver();
-  const [form, setForm] = useState<Record<string, string | number | string[]>>({});
+  const [form, setForm] = useState<DriverFormState>(EMPTY_DRIVER_FORM);
   const [phoneLocal, setPhoneLocal] = useState("");
   const [altPhoneLocal, setAltPhoneLocal] = useState("");
 
@@ -118,7 +154,8 @@ function DriverProfilePage() {
     );
   }
 
-  const set = (k: string, v: string | number | string[]) => setForm((f) => ({ ...f, [k]: v }));
+  const set = <K extends keyof DriverFormState>(k: K, v: DriverFormState[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
 
   const licenceDays = daysUntil(String(form.license_expiry || driver.license_expiry));
   const vehicleCategory =
@@ -362,7 +399,7 @@ function DriverProfilePage() {
                   type="number"
                   className="app-field-input"
                   value={String(form.experience_years ?? "")}
-                  onChange={(e) => set("experience_years", e.target.value)}
+                  onChange={(e) => set("experience_years", Number(e.target.value))}
                   disabled={!isDispatcher}
                 />
               </Field>
@@ -374,7 +411,7 @@ function DriverProfilePage() {
                   max={5}
                   className="app-field-input"
                   value={String(form.rating ?? "")}
-                  onChange={(e) => set("rating", e.target.value)}
+                  onChange={(e) => set("rating", Number(e.target.value))}
                   disabled={!isDispatcher}
                 />
               </Field>

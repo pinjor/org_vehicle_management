@@ -8,6 +8,7 @@ import {
   CalendarClock,
   Car,
   ClipboardList,
+  Clock,
   LayoutDashboard,
   Loader2,
   LogOut,
@@ -15,7 +16,6 @@ import {
   MoreHorizontal,
   PanelLeftClose,
   Plus,
-  Radar,
   Settings2,
   Shield,
   User,
@@ -54,8 +54,8 @@ type NavItem = {
   to:
     | "/dashboard"
     | "/requests"
+    | "/requests/pending"
     | "/requests/new"
-    | "/dispatch"
     | "/fleet"
     | "/drivers"
     | "/maintenance"
@@ -85,6 +85,7 @@ const NAV: NavItem[] = [
     roles: "all",
     section: "main",
   },
+  { to: "/requests/pending", label: "Pending", shortLabel: "Pending", icon: Clock, roles: "employee", section: "main" },
   { to: "/requests", label: "My rides", shortLabel: "Rides", icon: ClipboardList, roles: "employee", section: "main" },
   { to: "/requests/new", label: "Book", shortLabel: "Book", icon: RouteIcon, roles: "employee", section: "main" },
   { to: "/profile", label: "Account", shortLabel: "Account", icon: User, roles: "employee", section: "main" },
@@ -98,12 +99,11 @@ const NAV: NavItem[] = [
     roles: "driver",
     section: "main",
   },
-  { to: "/dispatch", label: "Dispatch", icon: Radar, roles: "dispatch", section: "ops" },
   { to: "/trips", label: "Trips", shortLabel: "Trips", icon: CalendarClock, roles: "dispatch", section: "ops" },
   { to: "/fleet", label: "Fleet", icon: Car, roles: "dispatch", section: "ops" },
   { to: "/drivers", label: "Drivers", icon: Users, roles: "dispatch", section: "ops" },
   { to: "/maintenance", label: "Maintenance", shortLabel: "Maint.", icon: Wrench, roles: "dispatch", section: "ops" },
-  { to: "/admin/users", label: "Users", shortLabel: "Users", icon: Shield, roles: "admin", section: "admin" },
+  { to: "/admin/users", label: "Users", shortLabel: "Users", icon: Shield, roles: "dispatch", section: "admin" },
   { to: "/admin/employees", label: "Employees", shortLabel: "Staff", icon: Briefcase, roles: "dispatch", section: "admin" },
   { to: "/admin/settings", label: "Settings", shortLabel: "Settings", icon: Settings2, roles: "dispatch", section: "admin" },
 ];
@@ -209,7 +209,7 @@ function SidebarNavSections({
                   icon={item.icon}
                   active={activeNav === item.to}
                   collapsed={collapsed}
-                  onNavigate={onNavigate}
+                  {...(onNavigate ? { onNavigate } : {})}
                 />
               ))}
             </div>
@@ -220,11 +220,11 @@ function SidebarNavSections({
   );
 }
 
-function bottomNavOrder(isDispatcher: boolean, isDriver: boolean, isAdmin: boolean, isEmployee: boolean): NavItem["to"][] {
-  if (isAdmin) return ["/dashboard", "/admin/employees", "/dispatch", "/admin/settings"];
-  if (isDispatcher) return ["/dashboard", "/dispatch", "/fleet", "/requests/new"];
+function bottomNavOrder(isDispatcher: boolean, isDriver: boolean, isEmployee: boolean): NavItem["to"][] {
+  // transport_admin is both admin + dispatcher — keep ops tabs on mobile
+  if (isDispatcher) return ["/dashboard", "/trips", "/fleet", "/drivers"];
   if (isDriver) return ["/dashboard", "/my-trips"];
-  if (isEmployee) return ["/dashboard", "/requests", "/profile"];
+  if (isEmployee) return ["/dashboard", "/requests/pending", "/requests"];
   return ["/dashboard"];
 }
 
@@ -251,7 +251,6 @@ export function AppShell({
     | "/admin/employees"
     | "/my-trips"
     | "/trips"
-    | "/dispatch"
     | "/admin/users"
     | "/admin/settings"
     | "/maintenance";
@@ -330,13 +329,20 @@ export function AppShell({
   const showHeaderRequests = isDispatcher;
   const sidebarItems = showHeaderRequests
     ? items.filter(
-        (n) => n.to !== "/requests" && n.to !== "/requests/new" && n.to !== "/profile",
+        (n) =>
+          n.to !== "/requests" &&
+          n.to !== "/requests/pending" &&
+          n.to !== "/requests/new" &&
+          n.to !== "/profile",
       )
-    : items.filter((n) => !(isEmployee && !isDispatcher && n.to === "/requests/new"));
+    : items.filter(
+        (n) =>
+          !(isEmployee && !isDispatcher && (n.to === "/requests/new" || n.to === "/profile")),
+      );
 
   const bottomKeys = useMemo(
-    () => bottomNavOrder(isDispatcher, isDriver, isAdmin, isEmployee),
-    [isDispatcher, isDriver, isAdmin, isEmployee],
+    () => bottomNavOrder(isDispatcher, isDriver, isEmployee),
+    [isDispatcher, isDriver, isEmployee],
   );
   const bottomItems = bottomKeys
     .map((key) => items.find((i) => i.to === key))
@@ -359,13 +365,14 @@ export function AppShell({
   const employeeRideChrome = isEmployee && !isDispatcher && !isAdmin;
   const isPlanRidePage = pathname === "/requests/new";
   /** Pages that draw their own top bar (plan-ride__top / driver trip). Admin request detail uses shell header. */
+  const isRequestDetailPage =
+    employeeRideChrome &&
+    /^\/requests\/[^/]+$/.test(pathname) &&
+    pathname !== "/requests/new" &&
+    pathname !== "/requests/pending";
   const isSelfTitledRidePage =
-    isPlanRidePage ||
-    (employeeRideChrome && /^\/requests\/[^/]+$/.test(pathname)) ||
-    /^\/my-trips\/[^/]+$/.test(pathname);
-  const hideMobileShellHeader =
-    isSelfTitledRidePage ||
-    (employeeRideChrome && (pathname === "/dashboard" || pathname === "/"));
+    isPlanRidePage || isRequestDetailPage || /^\/my-trips\/[^/]+$/.test(pathname);
+  const hideMobileShellHeader = isSelfTitledRidePage;
 
   if (loading) return <WorkspaceSkeleton />;
   if (!session) return null;
@@ -396,10 +403,10 @@ export function AppShell({
               <p className="text-sm font-bold tracking-tight leading-snug text-balance">
                 Vehicle Management System
               </p>
-              <p className="truncate text-[11px] text-sidebar-foreground/55">
+              <p className="truncate text-[11px]">
                 {isDriverPortal ? "Driver portal" : "Requests & dispatch"}
               </p>
-            </div>
+          </div>
           )}
         </div>
 
@@ -474,7 +481,7 @@ export function AppShell({
             employeeRideChrome && "app-page-header--ride",
           )}
         >
-          {employeeRideChrome ? null : (
+          {(employeeRideChrome || isSelfTitledRidePage) ? null : (
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
               {backTo ? (
                 <Button
@@ -513,13 +520,13 @@ export function AppShell({
                 <h1 className="app-page-header__title">{title}</h1>
                 {subtitle && <p className="app-page-header__subtitle">{subtitle}</p>}
               </div>
-            </div>
+          </div>
           )}
           <div
             className={cn(
               "flex shrink-0 items-center justify-end gap-1.5 sm:gap-2",
-              employeeRideChrome && "ride-header-actions",
-              !employeeRideChrome && "ml-auto",
+              (employeeRideChrome || isSelfTitledRidePage) && "ride-header-actions",
+              !(employeeRideChrome || isSelfTitledRidePage) && "ml-auto",
             )}
           >
             {actions}
@@ -691,27 +698,34 @@ export function AppShell({
                 </div>
               </PopoverContent>
             </Popover>
-            {!employeeRideChrome && (
             <Popover open={accountOpen} onOpenChange={setAccountOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
                   className={cn(
                     "h-8 max-w-[11rem] gap-2 border-2 px-2 ring-1 sm:max-w-[14rem]",
+                    employeeRideChrome && "size-9 max-w-none rounded-full border-0 p-0 ring-2 ring-black/5",
                     pathname === "/profile"
                       ? "border-primary/40 bg-primary/8 ring-primary/25"
-                      : "ring-primary/15",
+                      : !employeeRideChrome && "ring-primary/15",
                   )}
                   aria-label="Account menu"
                   tooltip="Account and profile"
                   tooltipSide="bottom"
                 >
-                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                  <span
+                    className={cn(
+                      "grid shrink-0 place-items-center rounded-full bg-primary font-semibold text-primary-foreground",
+                      employeeRideChrome ? "size-9 text-sm" : "size-6 text-[10px]",
+                    )}
+                  >
                     {(profile?.full_name ?? "U").charAt(0).toUpperCase()}
                   </span>
-                  <span className="hidden min-w-0 truncate text-xs font-semibold sm:inline">
-                    {profile?.full_name ?? (isDriverPortal ? t("shell.account") : "Account")}
-                  </span>
+                  {!employeeRideChrome ? (
+                    <span className="hidden min-w-0 truncate text-xs font-semibold sm:inline">
+                      {profile?.full_name ?? (isDriverPortal ? t("shell.account") : "Account")}
+                    </span>
+                  ) : null}
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -740,8 +754,7 @@ export function AppShell({
                       <LanguageToggle className="w-full justify-stretch [&_button]:flex-1" />
                     </div>
                   )}
-                  {!isAdmin && (
-                    <Link
+                  <Link
                       to="/profile"
                       onClick={() => setAccountOpen(false)}
                       className={cn(
@@ -752,7 +765,6 @@ export function AppShell({
                       <User className="size-4 shrink-0 text-muted-foreground" />
                       {isDriverPortal ? t("shell.myProfile") : "My profile"}
                     </Link>
-                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -767,23 +779,13 @@ export function AppShell({
                 </div>
               </PopoverContent>
             </Popover>
-            )}
-            {employeeRideChrome ? (
-              <Link
-                to="/profile"
-                className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground ring-2 ring-black/5"
-                aria-label="Account"
-              >
-                {(profile?.full_name ?? "U").charAt(0).toUpperCase()}
-              </Link>
-            ) : null}
           </div>
         </header>
 
         <main
           className={cn(
-            "app-main-canvas flex flex-1 flex-col px-3 pb-[calc(4.75rem+env(safe-area-inset-bottom))] sm:px-4 lg:px-5 lg:pb-4",
-            hideMobileSidebar ? "pt-4 sm:pt-5 lg:pt-5" : "py-3 sm:py-4",
+            "app-main-canvas flex flex-1 flex-col px-3 pb-[calc(4.75rem+env(safe-area-inset-bottom))] sm:px-4 lg:px-6 lg:pb-5 xl:px-8",
+            hideMobileSidebar ? "pt-4 sm:pt-5 lg:pt-5" : "py-3 sm:py-4 lg:py-5",
             fillViewport && "min-h-0 lg:overflow-hidden",
           )}
         >
@@ -817,9 +819,9 @@ export function AppShell({
                   ? "Ride"
                   : resolveShort(item);
               return (
-                <Link
-                  key={item.to}
-                  to={item.to}
+            <Link
+              key={item.to}
+              to={item.to}
                   onClick={() => setMenuOpen(false)}
                   className={cn(
                     "relative flex min-h-11 flex-col items-center justify-center gap-px px-1 py-1.5 text-[10px] font-semibold transition-colors",
@@ -855,7 +857,7 @@ export function AppShell({
               <AppIcon className="app-sidebar-logo" />
               <div className="app-sidebar-brand-text min-w-0">
                 <SheetTitle className="text-sm font-bold">Vehicle Management System</SheetTitle>
-                <p className="truncate text-left text-xs text-sidebar-foreground/55">
+                <p className="truncate text-left text-xs">
                   {profile?.full_name ?? (isDriverPortal ? t("shell.signedIn") : "Signed in")}
                   {displayPhone ? ` · ${formatBdPhone(displayPhone)}` : ""}
                 </p>
@@ -874,7 +876,7 @@ export function AppShell({
               <button
                 type="button"
                 onClick={() => void signOut()}
-                className="app-sidebar-footer-btn text-destructive/85 hover:bg-destructive/8 hover:text-destructive"
+                className="app-sidebar-footer-btn app-sidebar-footer-btn--signout"
               >
                 <LogOut className="size-4 shrink-0" />
                 <span>{isDriverPortal ? t("shell.signOut") : "Sign out"}</span>
