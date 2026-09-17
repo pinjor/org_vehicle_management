@@ -84,7 +84,7 @@ function DriverTripDetailPage() {
 
   const requestId = trip.request_id ?? trip.vehicle_requests?.id;
   if (isDispatcher && requestId) {
-    return <Navigate to="/requests/$requestId" params={{ requestId }} />;
+    return <Navigate to="/trips" search={{ request: requestId }} />;
   }
 
   return (

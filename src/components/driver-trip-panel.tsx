@@ -152,7 +152,6 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
 
       <div className="driver-trip__status-row">
         <LookupChip group="trip_status" value={trip.status} pill />
-        <span className="driver-trip__ref">{trip.reference}</span>
       </div>
 
       {request?.pickup_at ? <WhenBanner at={request.pickup_at} className="driver-trip__when" /> : null}

@@ -9,7 +9,7 @@ import { DataRow, Field, ChipGroup, MetaChip, Panel, StatusChip } from "@/compon
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
-import { APP_ROLE_CHIP, ROSTER_ROLE, formatDate } from "@/lib/fleet";
+import { APP_ROLE_CHIP, ROSTER_ROLE, formatDate, attnClass } from "@/lib/fleet";
 import { formatBdPhone, isValidBdPhone, maskBdPhoneInput } from "@/lib/phone";
 import { useDepartments, useDriver, useProfile, useUpdateProfile } from "@/lib/queries";
 
@@ -123,7 +123,11 @@ function EmployeeProfile({ profile }: { profile: ProfileRow }) {
           <div className="employee-profile__hero-copy min-w-0">
             <p className="employee-profile__name truncate">{profile?.full_name ?? "—"}</p>
             <p className="employee-profile__meta truncate">
-              {profile?.phone ? formatBdPhone(profile.phone) : "No phone"}
+              {profile?.phone ? (
+                formatBdPhone(profile.phone)
+              ) : (
+                <span className={attnClass("danger")}>No phone</span>
+              )}
               {profile?.employee_code ? ` · ${profile.employee_code}` : ""}
             </p>
             {deptName && <p className="employee-profile__dept truncate">{deptName}</p>}

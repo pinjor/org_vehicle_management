@@ -539,7 +539,7 @@ export function EmployeeRideBooking({ initialDropId }: { initialDropId?: string 
         points,
         passengers: [],
       });
-      toast.success(`Request ${res.reference} sent`);
+      toast.success("Request sent");
       void navigate({ to: "/requests/$requestId", params: { requestId: res.id } });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not submit request");

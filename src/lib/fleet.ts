@@ -114,6 +114,11 @@ export function sortRequestsList<
   });
 }
 
+/** Assigned / confirmed — waiting for Accept or Start ride. */
+export function isDriverPendingTrip(status: string) {
+  return status === "driver_assigned" || status === "driver_confirmed";
+}
+
 /** Trip lists: active first, done last; newest first inside each. */
 export function sortTripsList<
   T extends { status: string; created_at: string; completed_at?: string | null },
@@ -419,6 +424,43 @@ export function daysLeftLabel(value?: string | null) {
   if (diffDays === -1) return "Yesterday";
   if (diffDays > 1) return `${diffDays} days left`;
   return `${Math.abs(diffDays)} days ago`;
+}
+
+/** past = overdue/ago, today = same day, soon = upcoming. */
+export function whenRelTone(value?: string | null): "past" | "today" | "soon" {
+  if (!value) return "soon";
+  const target = new Date(value);
+  if (Number.isNaN(target.getTime())) return "today";
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diff = Math.round((startOfDay(target) - startOfDay(new Date())) / 86_400_000);
+  if (diff < 0) return "past";
+  if (diff === 0) return "today";
+  return "soon";
+}
+
+/** Attention color for status / placeholder copy that needs eye. */
+export type AttnTone = "ok" | "warn" | "danger" | "info" | "focus" | "muted";
+
+export function attnClass(tone: AttnTone) {
+  return `attn attn--${tone}`;
+}
+
+/** Infer attention tone from person/status labels (Unassigned, Awaiting…). */
+export function personAttnTone(name: string, sub?: string | null): AttnTone | null {
+  const blob = `${name} ${sub ?? ""}`.toLowerCase();
+  if (/not available|blocked|overdue|missed|failed|cancelled|no phone/.test(blob)) return "danger";
+  if (/unassigned|awaiting|needs dispatch|no driver|not assigned|pending assign/.test(blob)) return "warn";
+  if (/live|in progress|en route|on trip/.test(blob)) return "info";
+  return null;
+}
+
+/** Infer tone for ops glance tip lines. */
+export function tipAttnTone(tip: string): AttnTone {
+  const t = tip.toLowerCase();
+  if (/live now|on the road/.test(t)) return "info";
+  if (/no free|need assign|awaiting review|in shop|pending/.test(t)) return "warn";
+  if (/all clear|caught up|ready/.test(t)) return "ok";
+  return "focus";
 }
 
 /** "Pickup in 38 minutes" style micro-copy. */

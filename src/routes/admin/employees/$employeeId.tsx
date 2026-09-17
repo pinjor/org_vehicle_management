@@ -106,8 +106,8 @@ function EmployeeProfilePage() {
                       .filter(Boolean)
                       .join(" · ")}
                     end={<LookupChip group="request_status" value={r.status} />}
-                    to="/requests/$requestId"
-                    params={{ requestId: r.id }}
+                    to="/trips"
+                    search={{ request: r.id }}
                   />
                 </ListRow>
               ))}

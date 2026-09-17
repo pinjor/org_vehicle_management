@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Car, Clock, Radar, Users } from "lucide-react";
+import { AdminRideDetail } from "@/components/admin-ride-detail";
 import { AppShell } from "@/components/app-shell";
 import { AdminRequestCard, LiveTripCard } from "@/components/list-cards";
 import { RequestListSkeleton } from "@/components/loading-skeletons";
@@ -29,7 +30,14 @@ import {
 } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
+type TripsSearch = { request?: string };
+
 export const Route = createFileRoute("/trips")({
+  validateSearch: (search: Record<string, unknown>): TripsSearch => ({
+    ...(typeof search["request"] === "string" && search["request"]
+      ? { request: search["request"] }
+      : {}),
+  }),
   head: () => ({
     meta: [
       { title: "Trips — Vehicle Management System" },
@@ -123,6 +131,8 @@ function toTripRecord(t: FleetTripRow): TripRecord {
 
 function TripsPage() {
   const { isDispatcher, user } = useAuth();
+  const navigate = useNavigate();
+  const { request: detailId } = Route.useSearch();
   const [tab, setTab] = useState<TripsTab>("incoming");
   const [search, setSearch] = useState("");
   const requests = useRequests();
@@ -131,6 +141,10 @@ function TripsPage() {
   const vehicles = useVehicles();
   const drivers = useDrivers();
   const decide = useDecideRequest();
+
+  function closeDetail() {
+    void navigate({ to: "/trips", search: {}, replace: true });
+  }
 
   const incoming = useMemo(() => {
     const rows = (requests.data ?? []).filter((r) => ["submitted", "approved"].includes(r.status));
@@ -291,7 +305,7 @@ function TripsPage() {
                                 decide.mutate(
                                   { requestId: r.id, approve: false, actorId: user.id },
                                   {
-                                    onSuccess: () => toast.success(`Rejected ${r.reference}`),
+                                    onSuccess: () => toast.success("Request rejected"),
                                     onError: (err) => toast.error(err.message),
                                   },
                                 );
@@ -404,6 +418,16 @@ function TripsPage() {
           </Tabs>
         </Panel>
       </div>
+
+      {detailId ? (
+        <AdminRideDetail
+          requestId={detailId}
+          open
+          onOpenChange={(next) => {
+            if (!next) closeDetail();
+          }}
+        />
+      ) : null}
     </AppShell>
   );
 }

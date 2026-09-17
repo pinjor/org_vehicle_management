@@ -1,6 +1,6 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { daysLeftLabel, formatDate, formatTime, formatWeekday, relativeTime } from "@/lib/fleet";
+import { daysLeftLabel, formatDate, formatTime, formatWeekday, relativeTime, whenRelTone } from "@/lib/fleet";
 import { routeLine, type RoutePointLike } from "@/lib/route-summary";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +42,7 @@ export function WhenRail({
   }
   const dow = formatWeekday(at);
   const days = daysLeftLabel(at);
+  const tone = whenRelTone(at);
   return (
     <div
       className={railClass}
@@ -50,7 +51,7 @@ export function WhenRail({
       {dow ? <span className="when-rail__dow">{dow}</span> : null}
       <span className="when-rail__date">{formatCardDate(at)}</span>
       <span className="when-rail__time">{formatTime(at)}</span>
-      {days ? <span className="when-rail__rel">{days}</span> : null}
+      {days ? <span className={cn("when-rail__rel", `when-rail__rel--${tone}`)}>{days}</span> : null}
     </div>
   );
 }
@@ -65,11 +66,12 @@ export function WhenBanner({
 }) {
   if (!at) return null;
   const rel = relativeTime(at);
+  const tone = whenRelTone(at);
   return (
     <div className={cn("when-banner", className)} aria-label={`Pickup ${formatDate(at)} ${formatTime(at)}`}>
       <span className="when-banner__date">{formatCardDate(at)}</span>
       <span className="when-banner__time">{formatTime(at)}</span>
-      {rel ? <span className="when-banner__rel">{rel}</span> : null}
+      {rel ? <span className={cn("when-banner__rel", `when-banner__rel--${tone}`)}>{rel}</span> : null}
     </div>
   );
 }
@@ -146,11 +148,14 @@ export function WhenStamp({
 }) {
   if (!at) return null;
   const rel = withRelative ? relativeTime(at) : "";
+  const tone = withRelative ? whenRelTone(at) : null;
   return (
     <time className={cn("when-stamp", className)} dateTime={at}>
       <span className="when-stamp__date">{formatCardDate(at)}</span>
       <span className="when-stamp__time">{formatTime(at)}</span>
-      {rel ? <span className="when-stamp__rel">{rel}</span> : null}
+      {rel ? (
+        <span className={cn("when-stamp__rel", tone && `when-stamp__rel--${tone}`)}>{rel}</span>
+      ) : null}
     </time>
   );
 }
@@ -166,6 +171,7 @@ export function TripListRow({
   end,
   to,
   params,
+  search,
   className,
 }: {
   when?: string | null | undefined;
@@ -174,6 +180,7 @@ export function TripListRow({
   end?: ReactNode;
   to?: LinkProps["to"];
   params?: LinkProps["params"];
+  search?: LinkProps["search"];
   className?: string | undefined;
 }) {
   const body = (
@@ -196,6 +203,7 @@ export function TripListRow({
     <Link
       to={to}
       {...(params !== undefined ? { params } : {})}
+      {...(search !== undefined ? { search } : {})}
       className="trip-list-row-link"
     >
       {body}

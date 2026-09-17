@@ -652,7 +652,7 @@ function MaintenancePage() {
                 placeholder="Search vehicle, reason, driver…"
                 className="list-toolbar__search"
               />
-            </div>
+      </div>
 
             <TabsContent
               value="pending"
@@ -663,8 +663,8 @@ function MaintenancePage() {
               ) : pending.length === 0 ? (
                 <div className="p-3">
                   <EmptyState compact title="Nothing pending" description="New downtime reports show here." />
-                </div>
-              ) : (
+          </div>
+        ) : (
                 <DualList
                   cards={
                     <ul className="list-stagger space-y-2 p-3">
@@ -762,7 +762,7 @@ function MaintenancePage() {
               ) : allReports.length === 0 ? (
                 <div className="p-3">
                   <EmptyState compact title="No reports" description="Tap Log issue to record fleet downtime." />
-                </div>
+                    </div>
               ) : (
                 <DualList
                   cards={
@@ -770,9 +770,9 @@ function MaintenancePage() {
                       {allReports.map((r) => (
                         <li key={r.id}>
                           <ReportCard report={r} actions={reportActions(r)} />
-                        </li>
-                      ))}
-                    </ul>
+              </li>
+            ))}
+          </ul>
                   }
                   table={
                     <TripListTable
@@ -788,7 +788,7 @@ function MaintenancePage() {
               )}
             </TabsContent>
           </Tabs>
-        </Panel>
+      </Panel>
       </div>
 
       <ReportVehicleIssueDialog open={logOpen} onOpenChange={setLogOpen} />

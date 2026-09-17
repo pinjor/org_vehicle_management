@@ -11,6 +11,9 @@ import {
   TRIP_STATUS,
   simplifiedDriverCta,
   formatTime,
+  whenRelTone,
+  personAttnTone,
+  attnClass,
 } from "@/lib/fleet";
 import { useI18n } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/i18n/messages";
@@ -63,16 +66,6 @@ export function TripListTable({
       </div>
     </div>
   );
-}
-
-function whenRelTone(at: string): "today" | "soon" | "past" {
-  const target = new Date(at);
-  if (Number.isNaN(target.getTime())) return "today";
-  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const diff = Math.round((startOfDay(target) - startOfDay(new Date())) / 86_400_000);
-  if (diff < 0) return "past";
-  if (diff === 0) return "today";
-  return "soon";
 }
 
 function personInitials(name: string) {
@@ -159,22 +152,43 @@ function RouteCell(props: Parameters<typeof ListRouteCell>[0]) {
   return <ListRouteCell {...props} />;
 }
 
-export function ListPersonCell({ name, sub }: { name: string; sub?: string | null }) {
+export function ListPersonCell({
+  name,
+  sub,
+  avatar = true,
+}: {
+  name: string;
+  sub?: string | null;
+  /** Initials badge — off in dense tables. */
+  avatar?: boolean;
+}) {
+  const tone = personAttnTone(name, sub);
   return (
     <div className="trip-list-table__person">
-      <span className="trip-list-table__avatar" aria-hidden>
-        {personInitials(name)}
-      </span>
+      {avatar ? (
+        <span
+          className={cn(
+            "trip-list-table__avatar",
+            tone === "warn" && "trip-list-table__avatar--warn",
+            tone === "danger" && "trip-list-table__avatar--danger",
+          )}
+          aria-hidden
+        >
+          {personInitials(name)}
+        </span>
+      ) : null}
       <div className="trip-list-table__person-text min-w-0">
-        <p className="trip-list-table__person-name truncate">{name}</p>
-        {sub ? <p className="trip-list-table__muted truncate">{sub}</p> : null}
+        <p className={cn("trip-list-table__person-name truncate", tone && attnClass(tone))}>{name}</p>
+        {sub ? (
+          <p className={cn("trip-list-table__muted truncate", tone && attnClass(tone))}>{sub}</p>
+        ) : null}
       </div>
     </div>
   );
 }
 
 function PersonCell(props: Parameters<typeof ListPersonCell>[0]) {
-  return <ListPersonCell {...props} />;
+  return <ListPersonCell {...props} avatar={false} />;
 }
 
 function personProps(name: string, sub?: string | null) {
@@ -218,9 +232,13 @@ export function RequestTableRow({
   return (
     <tr
       className="trip-list-table__row--link"
-      onClick={() =>
-        navigate({ to: "/requests/$requestId", params: { requestId: request.id } })
-      }
+      onClick={() => {
+        if (mode === "admin") {
+          navigate({ to: "/trips", search: { request: request.id } });
+        } else {
+          navigate({ to: "/requests/$requestId", params: { requestId: request.id } });
+        }
+      }}
     >
       <td className="trip-list-table__col-time">
         <WhenCell at={request.pickup_at} />
@@ -260,9 +278,19 @@ export function RequestTableRow({
             {actions}
             {pending ? <AdminPendingActions request={request} layout="row" /> : null}
             <Button asChild variant="ghost" size="sm" className="h-8 px-2 text-xs">
-              <Link to="/requests/$requestId" params={{ requestId: request.id }} className="trip-list-table__link">
-                Open
-              </Link>
+              {mode === "admin" ? (
+                <Link to="/trips" search={{ request: request.id }} className="trip-list-table__link">
+                  Open
+                </Link>
+              ) : (
+                <Link
+                  to="/requests/$requestId"
+                  params={{ requestId: request.id }}
+                  className="trip-list-table__link"
+                >
+                  Open
+                </Link>
+              )}
             </Button>
           </div>
         </td>
@@ -290,7 +318,7 @@ export function TripTableRow({
   const driver = trip.drivers?.full_name?.trim() || "Unassigned";
   const vehicle = trip.vehicles?.registration_number ?? trip.vehicles?.name;
   const href = trip.request_id
-    ? ({ to: "/requests/$requestId" as const, params: { requestId: trip.request_id } })
+    ? ({ to: "/trips" as const, search: { request: trip.request_id } })
     : null;
   const navigate = useNavigate();
 

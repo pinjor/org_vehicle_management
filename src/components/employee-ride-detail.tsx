@@ -113,7 +113,6 @@ export function EmployeeRideDetail({ requestId }: { requestId: string }) {
 
       <div className="employee-ride__status-row">
         <LookupChip group="request_status" value={request.status} pill />
-        <span className="employee-ride__ref">{request.reference}</span>
       </div>
 
       <div className="ride-detail__desk employee-ride__desk">

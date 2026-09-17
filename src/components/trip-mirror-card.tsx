@@ -26,13 +26,15 @@ import { cn } from "@/lib/utils";
 function MirrorShell({
   to,
   params,
+  search,
   className,
   emphasize,
   children,
   footer,
 }: {
-  to: "/requests/$requestId" | "/my-trips/$tripId";
-  params: { requestId: string } | { tripId: string };
+  to: "/trips" | "/requests/$requestId" | "/my-trips/$tripId";
+  params?: { requestId: string } | { tripId: string };
+  search?: { request: string };
   className?: string;
   emphasize?: boolean;
   children: ReactNode;
@@ -40,7 +42,12 @@ function MirrorShell({
 }) {
   return (
     <div className={cn("trip-mirror", emphasize && "trip-mirror--hot", className)}>
-      <Link to={to} params={params as never} className="trip-mirror__main">
+      <Link
+        to={to}
+        {...(params ? { params: params as never } : {})}
+        {...(search ? { search } : {})}
+        className="trip-mirror__main"
+      >
         {children}
         <span className="trip-mirror__chevron" aria-hidden>
           <ChevronRight className="size-4" />
@@ -98,17 +105,27 @@ export function RequestMirrorCard({
         {actions}
         {pending ? <AdminPendingActions request={request} layout="row" /> : null}
         <Button asChild variant="ghost" size="sm" className="h-8 px-2 text-xs">
-          <Link to="/requests/$requestId" params={{ requestId: request.id }}>
-            Open
-          </Link>
+          {mode === "admin" ? (
+            <Link to="/trips" search={{ request: request.id }}>
+              Open
+            </Link>
+          ) : (
+            <Link to="/requests/$requestId" params={{ requestId: request.id }}>
+              Open
+            </Link>
+          )}
         </Button>
       </div>
     ) : null;
 
   return (
     <MirrorShell
-      to="/requests/$requestId"
-      params={{ requestId: request.id }}
+      {...(mode === "admin"
+        ? { to: "/trips" as const, search: { request: request.id } }
+        : {
+            to: "/requests/$requestId" as const,
+            params: { requestId: request.id },
+          })}
       {...(className ? { className } : {})}
       {...(footer ? { footer } : {})}
     >
@@ -181,36 +198,32 @@ export function DriverTripMirrorCard({
         : passengerLabel(req.passenger_count)
       : "—";
 
-  const footer = (
-    <div className="trip-mirror__actions" onClick={(e) => e.stopPropagation()}>
-      {cta ? (
-        <Button
-          type="button"
-          size="sm"
-          className="h-8"
-          disabled={advance.isPending}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            advance.mutate(
-              { tripId: trip.id, action: cta.action },
-              {
-                onSuccess: () => toast.success(ctaLabel),
-                onError: (err) => toast.error(err.message),
-              },
-            );
-          }}
-        >
-          {advance.isPending ? "…" : ctaLabel}
-        </Button>
-      ) : null}
-      <Button asChild variant="ghost" size="sm" className="h-8 px-2 text-xs">
-        <Link to="/my-trips/$tripId" params={{ tripId: trip.id }}>
-          Open
-        </Link>
-      </Button>
+  const footer = cta ? (
+    <div className="trip-mirror__cta" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        className={cn(
+          "ops-card__accept",
+          cta.kind === "end" && "ops-card__accept--end",
+          cta.kind === "start" && "ops-card__accept--start",
+        )}
+        disabled={advance.isPending}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          advance.mutate(
+            { tripId: trip.id, action: cta.action },
+            {
+              onSuccess: () => toast.success(ctaLabel),
+              onError: (err) => toast.error(err.message),
+            },
+          );
+        }}
+      >
+        {advance.isPending ? "…" : ctaLabel}
+      </button>
     </div>
-  );
+  ) : null;
 
   return (
     <MirrorShell
@@ -318,8 +331,8 @@ export function TripMirrorCard({ trip }: { trip: TripRecord }) {
 
   return (
     <MirrorShell
-      to="/requests/$requestId"
-      params={{ requestId: href }}
+      to="/trips"
+      search={{ request: href }}
       className="trip-mirror--trip"
     >
       {body}

@@ -1,5 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { AdminRideDetail } from "@/components/admin-ride-detail";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
 import { EmployeeRideDetail } from "@/components/employee-ride-detail";
 import { useAuth } from "@/lib/auth";
@@ -8,9 +7,15 @@ export const Route = createFileRoute("/requests/$requestId")({
   head: () => ({
     meta: [
       { title: "Request detail — Vehicle Management System" },
-      { name: "description", content: "Full request record: route, passengers, assignment, trip progress and audit trail." },
+      {
+        name: "description",
+        content: "Full request record: route, passengers, assignment, trip progress and audit trail.",
+      },
       { property: "og:title", content: "Request detail — Vehicle Management System" },
-      { property: "og:description", content: "Review, approve and dispatch an individual vehicle request." },
+      {
+        property: "og:description",
+        content: "Review, approve and dispatch an individual vehicle request.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -30,5 +35,6 @@ function RequestDetailPage() {
     );
   }
 
-  return <AdminRideDetail requestId={requestId} />;
+  // Admin/dispatcher: open drawer on trips board (stay in context)
+  return <Navigate to="/trips" search={{ request: requestId }} replace />;
 }

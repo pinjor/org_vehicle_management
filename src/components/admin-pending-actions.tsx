@@ -72,7 +72,7 @@ export function AdminPendingActions({
           <DialogHeader>
             <DialogTitle>Assign driver</DialogTitle>
             <DialogDescription>
-              {request.reference} · search or pick an available driver
+              Search or pick an available driver for this request
             </DialogDescription>
           </DialogHeader>
           <AssignmentPanel

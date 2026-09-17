@@ -9,7 +9,7 @@ import {
   TripListTable,
 } from "@/components/trip-list-table";
 import { useAuth } from "@/lib/auth";
-import { sortTripsList } from "@/lib/fleet";
+import { sortTripsList, isDriverPendingTrip } from "@/lib/fleet";
 import { useI18n } from "@/lib/i18n";
 import { useDriverTrips } from "@/lib/queries";
 
@@ -53,15 +53,17 @@ function MyTripsPage() {
   }
 
   const sorted = sortTripsList(data ?? []);
-  const trips = sorted.filter((row) => !["completed", "cancelled"].includes(row.status));
-  const past = sorted.filter((row) => ["completed", "cancelled"].includes(row.status));
+  const open = sorted.filter((row) => !["completed", "cancelled", "breakdown"].includes(row.status));
+  const pending = open.filter((row) => isDriverPendingTrip(row.status));
+  const live = open.filter((row) => !isDriverPendingTrip(row.status));
+  const past = sorted.filter((row) => ["completed", "cancelled", "breakdown"].includes(row.status));
 
   return (
     <AppShell title={t("driver.trips.title")} subtitle={t("driver.trips.subtitle")}>
       <div className="role-dashboard page-stack" key={isLoading ? "loading" : "ready"}>
         {isLoading && <PanelSkeleton rows={4} />}
 
-        {!isLoading && trips.length === 0 && (
+        {!isLoading && open.length === 0 && (
           <EmptyState
             compact
             title={t("driver.trips.emptyTitle")}
@@ -69,15 +71,49 @@ function MyTripsPage() {
           />
         )}
 
-        {trips.length > 0 && (
+        {pending.length > 0 && (
           <section className="space-y-2">
             <p className="px-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {t("driver.trips.active", { count: trips.length })}
+              {t("driver.trips.pending", { count: pending.length })}
             </p>
             <DualList
               cards={
                 <ul className="space-y-2">
-                  {trips.map((trip, i) => (
+                  {pending.map((trip, i) => (
+                    <li key={trip.id}>
+                      <DriverAssignmentCard trip={trip} emphasize={live.length === 0 && i === 0} />
+                    </li>
+                  ))}
+                </ul>
+              }
+              table={
+                <div className="overflow-hidden rounded-lg border border-border">
+                  <TripListTable
+                    headers={["Time", "Passenger", "Route", "Pax", "Status", "Actions"]}
+                  >
+                    {pending.map((trip, i) => (
+                      <DriverTripTableRow
+                        key={trip.id}
+                        trip={trip}
+                        emphasize={live.length === 0 && i === 0}
+                      />
+                    ))}
+                  </TripListTable>
+                </div>
+              }
+            />
+          </section>
+        )}
+
+        {live.length > 0 && (
+          <section className="space-y-2">
+            <p className="px-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {t("driver.trips.active", { count: live.length })}
+            </p>
+            <DualList
+              cards={
+                <ul className="space-y-2">
+                  {live.map((trip, i) => (
                     <li key={trip.id}>
                       <DriverAssignmentCard trip={trip} emphasize={i === 0} />
                     </li>
@@ -89,7 +125,7 @@ function MyTripsPage() {
                   <TripListTable
                     headers={["Time", "Passenger", "Route", "Pax", "Status", "Actions"]}
                   >
-                    {trips.map((trip, i) => (
+                    {live.map((trip, i) => (
                       <DriverTripTableRow key={trip.id} trip={trip} emphasize={i === 0} />
                     ))}
                   </TripListTable>

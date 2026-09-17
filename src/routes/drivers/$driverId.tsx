@@ -507,7 +507,7 @@ function DriverProfilePage() {
                         routeLineCompact(t.vehicle_requests?.request_route_points) ||
                         t.vehicle_requests?.requester_name?.trim() ||
                         t.vehicle_requests?.purpose ||
-                        t.reference
+                        "Trip"
                       }
                       subtitle={[
                         t.vehicle_requests?.requester_name?.trim() &&
@@ -516,13 +516,12 @@ function DriverProfilePage() {
                           : null,
                         t.vehicles?.registration_number ?? t.vehicles?.name,
                         t.vehicle_requests?.purpose,
-                        t.reference,
                       ]
                         .filter(Boolean)
                         .join(" · ")}
                       end={<LookupChip group="trip_status" value={t.status} />}
-                      to={requestId ? "/requests/$requestId" : undefined}
-                      params={requestId ? { requestId } : undefined}
+                      to={requestId ? "/trips" : undefined}
+                      search={requestId ? { request: requestId } : undefined}
                     />
                   </ListRow>
                 );

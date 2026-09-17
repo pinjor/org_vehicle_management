@@ -39,7 +39,7 @@ export function AdminRequestAlert() {
     for (const r of data) {
       if (seen.current.has(r.id)) continue;
       seen.current.add(r.id);
-      toast.info(`New request ${r.reference}`, {
+      toast.info("New vehicle request", {
         description: `${r.requester_name} · ${r.passenger_count} passengers · ${relativeTime(r.pickup_at)}`,
         duration: 12_000,
         action: {
@@ -62,7 +62,7 @@ export function AdminRequestAlert() {
         <DialogHeader className="shrink-0 pr-6 text-left">
           <DialogTitle>New request</DialogTitle>
           <DialogDescription>
-            {popup.reference} · {popup.requester_name} · {popup.purpose}
+            {popup.requester_name} · {popup.purpose}
           </DialogDescription>
         </DialogHeader>
 
@@ -118,7 +118,7 @@ export function AdminRequestAlert() {
 
         <DialogFooter className="shrink-0 flex-col gap-2 sm:flex-col">
           <Button variant="ghost" asChild className="w-full" tooltip="Full request details">
-            <Link to="/requests/$requestId" params={{ requestId: popup.id }}>
+            <Link to="/trips" search={{ request: popup.id }}>
               Details
             </Link>
           </Button>
