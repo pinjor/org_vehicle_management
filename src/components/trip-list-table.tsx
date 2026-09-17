@@ -236,7 +236,7 @@ export function RequestTableRow({
         if (mode === "admin") {
           navigate({ to: "/trips", search: { request: request.id } });
         } else {
-          navigate({ to: "/requests/$requestId", params: { requestId: request.id } });
+          navigate({ to: "/requests", search: { request: request.id } });
         }
       }}
     >
@@ -284,8 +284,8 @@ export function RequestTableRow({
                 </Link>
               ) : (
                 <Link
-                  to="/requests/$requestId"
-                  params={{ requestId: request.id }}
+                  to="/requests"
+                  search={{ request: request.id }}
                   className="trip-list-table__link"
                 >
                   Open
@@ -411,7 +411,7 @@ export function DriverTripTableRow({
   return (
     <tr
       className={cn("trip-list-table__row--link", emphasize && "trip-list-table__row--hot")}
-      onClick={() => navigate({ to: "/my-trips/$tripId", params: { tripId: trip.id } })}
+      onClick={() => navigate({ to: "/my-trips", search: { trip: trip.id } })}
     >
       <td className="trip-list-table__col-time">
         <WhenCell at={req?.pickup_at ?? trip.created_at} />
@@ -461,7 +461,7 @@ export function DriverTripTableRow({
             </Button>
           ) : null}
           <Button asChild variant="ghost" size="sm" className="h-8 px-2 text-xs">
-            <Link to="/my-trips/$tripId" params={{ tripId: trip.id }} className="trip-list-table__link">
+            <Link to="/my-trips" search={{ trip: trip.id }} className="trip-list-table__link">
               Open
             </Link>
           </Button>

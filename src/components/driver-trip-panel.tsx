@@ -1,17 +1,21 @@
-import { Link } from "@tanstack/react-router";
-import { useRef } from "react";
-import { ArrowLeft, Navigation, Phone } from "lucide-react";
+import { Navigation, Phone } from "lucide-react";
 import { toast } from "sonner";
-import { LiveTripMap } from "@/components/live-trip-map";
-import { WhenBanner, WhenStamp, RouteFlow } from "@/components/info-blocks";
+import { WhenStamp, RouteFlow, formatCardDate } from "@/components/info-blocks";
 import { LookupChip } from "@/components/lookup-chip";
 import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useI18n } from "@/lib/i18n";
-import { useAdvanceTrip, usePingTripLocation } from "@/lib/queries";
-import { passengerLabel, simplifiedDriverCta } from "@/lib/fleet";
+import { useAdvanceTrip } from "@/lib/queries";
+import { formatTime, formatWeekday, passengerLabel, simplifiedDriverCta } from "@/lib/fleet";
 import { formatBdPhone } from "@/lib/phone";
 import { trackFocusIndex } from "@/lib/ride-detail";
-import type { LatLng } from "@/lib/osm";
+import { useNarrowDrawer } from "@/lib/use-narrow-drawer";
 import { cn } from "@/lib/utils";
 
 type TripPoint = {
@@ -24,7 +28,7 @@ type TripPoint = {
   expected_at?: string | null;
 };
 
-type DriverTrip = {
+export type DriverTripDetail = {
   id: string;
   reference: string;
   status: string;
@@ -52,16 +56,19 @@ type Pax = {
   is_primary?: boolean;
 };
 
-/**
- * Driver trip detail — road-first:
- * When → next stop → passengers + call → map → Accept / Start / End CTA
- */
-export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
+/** Driver trip drawer — mount on /my-trips via search `trip`. */
+export function DriverTripPanel({
+  trip,
+  open,
+  onOpenChange,
+}: {
+  trip: DriverTripDetail;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const narrow = useNarrowDrawer();
   const { t } = useI18n();
   const advance = useAdvanceTrip();
-  const ping = usePingTripLocation();
-  const lastPingAt = useRef(0);
-  const lastPos = useRef<LatLng | null>(null);
 
   const request = trip.vehicle_requests;
   const points = (request?.request_route_points ?? []).slice().sort((a, b) => a.sequence - b.sequence);
@@ -106,20 +113,21 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
           ? t("driver.action.endRideHint")
           : "";
 
-  function handlePosition(pos: LatLng) {
-    lastPos.current = pos;
-    const now = Date.now();
-    if (now - lastPingAt.current < 5_000) return;
-    lastPingAt.current = now;
-    ping.mutate({ tripId: trip.id, latitude: pos[0], longitude: pos[1] });
-  }
+  const whenLine = request?.pickup_at
+    ? [formatWeekday(request.pickup_at), formatCardDate(request.pickup_at), formatTime(request.pickup_at)]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
+
+  const passengerTitle =
+    passengers[0]?.full_name?.trim() ||
+    request?.requester_name?.trim() ||
+    t("driver.detail.assignment");
 
   function runCta() {
     if (!cta) return;
-    const pos = lastPos.current;
-    const payload = pos ? { latitude: pos[0], longitude: pos[1] } : undefined;
     advance.mutate(
-      payload ? { tripId: trip.id, action: cta.action, payload } : { tripId: trip.id, action: cta.action },
+      { tripId: trip.id, action: cta.action },
       {
         onSuccess: () => toast.success(ctaLabel),
         onError: (e) => toast.error(e.message),
@@ -127,152 +135,156 @@ export function DriverTripPanel({ trip }: { trip: DriverTrip }) {
     );
   }
 
-  const mapPoints = points.map((p) => ({
-    name: p.name,
-    ...(p.address != null ? { address: p.address } : {}),
-    latitude: p.latitude,
-    longitude: p.longitude,
-    point_type: p.point_type,
-  }));
-
   return (
-    <div
-      className={cn(
-        "plan-ride ride-detail ride-detail--driver",
-        isActive && "ride-detail--driver-active",
-      )}
-    >
-      <header className="plan-ride__top">
-        <Link to="/dashboard" className="plan-ride__back" aria-label={t("driver.detail.back")}>
-          <ArrowLeft className="size-5" />
-        </Link>
-        <h1 className="plan-ride__title">{t("driver.detail.assignment")}</h1>
-        <span className="plan-ride__top-spacer" aria-hidden />
-      </header>
-
-      <div className="driver-trip__status-row">
-        <LookupChip group="trip_status" value={trip.status} pill />
-      </div>
-
-      {request?.pickup_at ? <WhenBanner at={request.pickup_at} className="driver-trip__when" /> : null}
-
-      {hasRoute ? (
-        <div className="driver-trip__where">
-          <RouteFlow points={points} {...(isActive ? { focusIndex: focusIdx } : {})} />
-        </div>
-      ) : null}
-
-      {nextStop && isActive ? (
-        <section className="driver-trip__next" aria-label="Next stop">
-          <div className="driver-trip__next-icon" aria-hidden>
-            <Navigation className="size-5" />
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side={narrow ? "bottom" : "right"}
+        className="admin-req-drawer data-[state=open]:duration-500 data-[state=closed]:duration-300"
+        overlayClassName="admin-req-drawer__overlay data-[state=open]:duration-300 data-[state=closed]:duration-200"
+      >
+        <SheetHeader className="admin-req-drawer__head">
+          <div className="admin-req-drawer__head-top">
+            <div className="admin-req-drawer__identity min-w-0">
+              <SheetTitle className="admin-req-drawer__title">{passengerTitle}</SheetTitle>
+              {whenLine ? <p className="admin-req-drawer__when-line">{whenLine}</p> : null}
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="driver-trip__next-label">
-              {nextStop.point_type === "destination"
-                ? "Final drop"
-                : nextStop.point_type === "pickup"
-                  ? "Pickup"
-                  : "Next stop"}
-            </p>
-            <p className="driver-trip__next-name">{nextStop.name}</p>
-            {nextStop.address ? <p className="driver-trip__next-addr">{nextStop.address}</p> : null}
-            {nextStop.expected_at ? (
-              <p className="driver-trip__next-due">
-                Due <WhenStamp at={nextStop.expected_at} withRelative />
-              </p>
+          <SheetDescription className="sr-only">{t("driver.detail.assignment")}</SheetDescription>
+          <div className="admin-req-drawer__head-meta">
+            <div className="admin-req__chips">
+              <LookupChip group="trip_status" value={trip.status} pill />
+              {paxCount != null ? (
+                <span className="admin-req__pill">{passengerLabel(paxCount)}</span>
+              ) : null}
+              {plate ? <span className="admin-req__pill">{plate}</span> : null}
+              {isActive && nextStop ? (
+                <span className="admin-req__pill admin-req__pill--live">
+                  {nextStop.point_type === "destination"
+                    ? "Final drop"
+                    : nextStop.point_type === "pickup"
+                      ? "Pickup"
+                      : "Next stop"}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </SheetHeader>
+
+        <div className="admin-req admin-req--drawer">
+          <div className="admin-req-drawer__scroll">
+            {nextStop && isActive ? (
+              <section className="admin-req__card driver-trip__next-card" aria-label="Next stop">
+                <div className="driver-trip__next driver-trip__next--drawer">
+                  <div className="driver-trip__next-icon" aria-hidden>
+                    <Navigation className="size-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="driver-trip__next-label">
+                      {nextStop.point_type === "destination"
+                        ? "Final drop"
+                        : nextStop.point_type === "pickup"
+                          ? "Pickup"
+                          : "Next stop"}
+                    </p>
+                    <p className="driver-trip__next-name">{nextStop.name}</p>
+                    {nextStop.address ? (
+                      <p className="driver-trip__next-addr">{nextStop.address}</p>
+                    ) : null}
+                    {nextStop.expected_at ? (
+                      <p className="driver-trip__next-due">
+                        Due <WhenStamp at={nextStop.expected_at} withRelative />
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {hasRoute ? (
+              <section className="admin-req__route" aria-label="Route">
+                <p className="admin-req__section-label">Route</p>
+                <RouteFlow points={points} {...(isActive ? { focusIndex: focusIdx } : {})} />
+              </section>
+            ) : null}
+
+            {passengers.length > 0 ? (
+              <section className="admin-req__card">
+                <p className="admin-req__section-label">
+                  Passenger{passengers.length > 1 ? "s" : ""}
+                  {paxCount != null ? ` · ${paxCount}` : ""}
+                </p>
+                <ul className="driver-trip__pax-list driver-trip__pax-list--drawer">
+                  {passengers.map((p, i) => (
+                    <li key={p.id ?? `${p.full_name}-${i}`} className="driver-trip__pax">
+                      <span className="driver-trip__pax-name">{p.full_name}</span>
+                      {p.phone ? (
+                        <span className="driver-trip__pax-phone">{formatBdPhone(p.phone)}</span>
+                      ) : (
+                        <span className="driver-trip__pax-miss">No phone</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {isActive && callTargets.length > 0 ? (
+                  <div
+                    className={cn(
+                      "driver-trip__calls",
+                      callTargets.length > 1 && "driver-trip__calls--split",
+                    )}
+                  >
+                    {callTargets.map((p, i) => (
+                      <a
+                        key={p.id ?? `call-${i}`}
+                        href={`tel:${p.phone}`}
+                        className="driver-trip__call"
+                      >
+                        <Phone className="size-4 shrink-0" />
+                        <span className="driver-trip__call-text">
+                          Call {p.full_name.split(" ")[0] || "passenger"}
+                        </span>
+                        <span className="driver-trip__call-num">{formatBdPhone(p.phone!)}</span>
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+
+            {request?.purpose?.trim() ? (
+              <div className="admin-req__facts">
+                <div className="admin-req__purpose">
+                  <p className="admin-req__section-label">Purpose</p>
+                  <p className="admin-req__purpose-text">{request.purpose}</p>
+                </div>
+              </div>
             ) : null}
           </div>
-        </section>
-      ) : null}
 
-      <div className="ride-detail__desk driver-trip__desk">
-        <div className="ride-detail__desk-main driver-trip__main">
-          {passengers.length > 0 ? (
-            <section className="driver-trip__people">
-              <p className="driver-trip__section-label">
-                Passenger{passengers.length > 1 ? "s" : ""}
-                {paxCount != null ? ` · ${paxCount}` : ""}
-              </p>
-              <ul className="driver-trip__pax-list">
-                {passengers.map((p, i) => (
-                  <li key={p.id ?? `${p.full_name}-${i}`} className="driver-trip__pax">
-                    <span className="driver-trip__pax-name">{p.full_name}</span>
-                    {!p.phone ? <span className="driver-trip__pax-miss">No phone</span> : null}
-                  </li>
-                ))}
-              </ul>
-              {isActive && callTargets.length > 0 ? (
-                <div
+          {isActive ? (
+            <div className="driver-trip__drawer-cta">
+              {cta ? (
+                <button
+                  type="button"
                   className={cn(
-                    "driver-trip__calls",
-                    callTargets.length > 1 && "driver-trip__calls--split",
+                    "ops-card__accept",
+                    cta.kind === "end" && "ops-card__accept--end",
+                    cta.kind === "start" && "ops-card__accept--start",
                   )}
+                  disabled={advance.isPending}
+                  title={ctaHint}
+                  onClick={runCta}
                 >
-                  {callTargets.map((p, i) => (
-                    <a
-                      key={p.id ?? `call-${i}`}
-                      href={`tel:${p.phone}`}
-                      className="driver-trip__call"
-                    >
-                      <Phone className="size-4 shrink-0" />
-                      <span className="driver-trip__call-text">
-                        Call {p.full_name.split(" ")[0] || "passenger"}
-                      </span>
-                      <span className="driver-trip__call-num">{formatBdPhone(p.phone!)}</span>
-                    </a>
-                  ))}
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
-          {[plate, paxCount != null ? passengerLabel(paxCount) : null].some(Boolean) ? (
-            <p className="driver-trip__meta">
-              {[plate, paxCount != null ? passengerLabel(paxCount) : null]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
-          ) : null}
-        </div>
-
-        {mapPoints.length > 0 ? (
-          <aside className="ride-detail__desk-aside driver-trip__aside" aria-label="Live map">
-            <section className="ride-detail__map driver-trip__map">
-              <LiveTripMap
-                mapOnly
-                className="ride-detail__map-el driver-trip__map-el"
-                points={mapPoints}
-                focusIndex={focusIdx}
-                live={isActive}
-                {...(isActive ? { onPosition: handlePosition } : {})}
-                markerLabel="Your location"
-              />
-            </section>
-          </aside>
-        ) : null}
-      </div>
-
-      {isActive ? (
-        <div className="ride-detail__driver-actions driver-trip__actions">
-          {cta ? (
-            <Button
-              variant={cta.kind === "end" ? "destructive" : "default"}
-              className={cn(
-                "ride-detail__action-btn ride-detail__action-btn--primary driver-trip__cta",
-                cta.kind === "end" && "driver-trip__cta--end",
+                  {advance.isPending ? "…" : ctaLabel}
+                </button>
+              ) : (
+                <p className="ride-detail__muted px-3 py-2 text-center text-sm">
+                  {t("driver.panel.noActions")}
+                </p>
               )}
-              disabled={advance.isPending}
-              tooltip={ctaHint}
-              onClick={runCta}
-            >
-              {advance.isPending ? "…" : ctaLabel}
-            </Button>
-          ) : (
-            <p className="ride-detail__muted">{t("driver.panel.noActions")}</p>
-          )}
+            </div>
+          ) : null}
         </div>
-      ) : null}
-    </div>
+      </SheetContent>
+    </Sheet>
   );
 }

@@ -1,7 +1,8 @@
-import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { Plus } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { EmployeeRideDetail } from "@/components/employee-ride-detail";
 import { EmployeeRequestCard } from "@/components/list-cards";
 import { RequestListSkeleton } from "@/components/loading-skeletons";
 import { EmptyState, Panel } from "@/components/fleet-ui";
@@ -16,7 +17,14 @@ import { useRequests } from "@/lib/queries";
 
 const PENDING_STATUSES = new Set(["submitted", "approved"]);
 
+type PendingSearch = { request?: string };
+
 export const Route = createFileRoute("/requests/pending")({
+  validateSearch: (search: Record<string, unknown>): PendingSearch => ({
+    ...(typeof search["request"] === "string" && search["request"]
+      ? { request: search["request"] }
+      : {}),
+  }),
   head: () => ({
     meta: [
       { title: "Pending rides — Vehicle Management System" },
@@ -27,6 +35,8 @@ export const Route = createFileRoute("/requests/pending")({
 });
 
 function PendingRidesPage() {
+  const navigate = useNavigate();
+  const { request: detailId } = Route.useSearch();
   const { isDispatcher, isEmployee, user } = useAuth();
   const { data, isLoading } = useRequests(user?.id ? { requesterId: user.id } : undefined);
 
@@ -38,6 +48,10 @@ function PendingRidesPage() {
 
   if (isDispatcher || !isEmployee) {
     return <Navigate to="/requests" />;
+  }
+
+  function closeDetail() {
+    void navigate({ to: "/requests/pending", search: {}, replace: true });
   }
 
   return (
@@ -100,6 +114,16 @@ function PendingRidesPage() {
           )}
         </Panel>
       </div>
+
+      {detailId ? (
+        <EmployeeRideDetail
+          requestId={detailId}
+          open
+          onOpenChange={(next) => {
+            if (!next) closeDetail();
+          }}
+        />
+      ) : null}
     </AppShell>
   );
 }

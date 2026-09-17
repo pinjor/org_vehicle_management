@@ -11046,6 +11046,57 @@ a.admin-req__who-name:hover,
   overflow-wrap: anywhere;
 }
 
+.driver-trip__drawer-cta {
+  flex-shrink: 0;
+  margin-top: auto;
+  border-top: 1px solid color-mix(in oklch, var(--color-border) 70%, transparent);
+}
+
+.driver-trip__drawer-cta .ops-card__accept {
+  min-height: 3rem;
+  border-radius: 0;
+}
+
+.driver-trip__next--drawer {
+  margin: 0;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0.75rem 0.9rem 0.9rem;
+}
+
+.driver-trip__pax-list--drawer {
+  list-style: none;
+  margin: 0;
+  padding: 0.15rem 0.9rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.driver-trip__pax-list--drawer .driver-trip__pax {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.driver-trip__pax-phone {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--color-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-req--drawer .driver-trip__calls {
+  border-top: 1px solid color-mix(in oklch, var(--color-border) 80%, transparent);
+}
+
+.admin-req--drawer .employee-ride__waiting {
+  margin: 0.35rem 0.85rem 0.85rem;
+}
+
 .ride-detail__map-el--drawer {
   height: 12.5rem !important;
   min-height: 12.5rem !important;

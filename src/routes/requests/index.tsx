@@ -1,7 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { EmployeeRideDetail } from "@/components/employee-ride-detail";
 import { AdminRequestCard, EmployeeRequestCard } from "@/components/list-cards";
 import { RequestListSkeleton } from "@/components/loading-skeletons";
 import { EmptyState, FilterBar, Panel } from "@/components/fleet-ui";
@@ -17,7 +18,14 @@ import { sortRequestsList } from "@/lib/fleet";
 import { useLookupOptions } from "@/lib/lookups-context";
 import { useRequests } from "@/lib/queries";
 
+type RequestsSearch = { request?: string };
+
 export const Route = createFileRoute("/requests/")({
+  validateSearch: (search: Record<string, unknown>): RequestsSearch => ({
+    ...(typeof search["request"] === "string" && search["request"]
+      ? { request: search["request"] }
+      : {}),
+  }),
   head: () => ({
     meta: [
       { title: "Vehicle requests — Vehicle Management System" },
@@ -32,6 +40,8 @@ export const Route = createFileRoute("/requests/")({
 });
 
 function RequestsPage() {
+  const navigate = useNavigate();
+  const { request: detailId } = Route.useSearch();
   const { isDispatcher, isDriver, isEmployee, user } = useAuth();
   const { data, isLoading } = useRequests(isDispatcher || !user ? undefined : { requesterId: user.id });
   const statusOptions = useLookupOptions("request_status");
@@ -66,6 +76,10 @@ function RequestsPage() {
       })),
     ];
   }, [statusOptions, allRows]);
+
+  function closeDetail() {
+    void navigate({ to: "/requests", search: {}, replace: true });
+  }
 
   return (
     <AppShell
@@ -150,6 +164,16 @@ function RequestsPage() {
           )}
         </Panel>
       </div>
+
+      {detailId && isEmployee && !isDispatcher ? (
+        <EmployeeRideDetail
+          requestId={detailId}
+          open
+          onOpenChange={(next) => {
+            if (!next) closeDetail();
+          }}
+        />
+      ) : null}
     </AppShell>
   );
 }

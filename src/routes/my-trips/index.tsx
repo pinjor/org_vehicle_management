@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { PanelSkeleton } from "@/components/loading-skeletons";
 import { AppShell } from "@/components/app-shell";
+import { DriverTripPanel } from "@/components/driver-trip-panel";
 import { DriverAssignmentCard } from "@/components/list-cards";
 import { EmptyState, Panel } from "@/components/fleet-ui";
 import {
@@ -13,17 +14,24 @@ import { sortTripsList, isDriverPendingTrip } from "@/lib/fleet";
 import { useI18n } from "@/lib/i18n";
 import { useDriverTrips } from "@/lib/queries";
 
+type MyTripsSearch = { trip?: string };
+
 export const Route = createFileRoute("/my-trips/")({
+  validateSearch: (search: Record<string, unknown>): MyTripsSearch => ({
+    ...(typeof search["trip"] === "string" && search["trip"] ? { trip: search["trip"] } : {}),
+  }),
   head: () => ({
     meta: [
       { title: "My trips — Vehicle Management System" },
-      { name: "description", content: "Driver view: pickup, drop, live map and trip progress." },
+      { name: "description", content: "Driver view: pickup, drop and trip progress." },
     ],
   }),
   component: MyTripsPage,
 });
 
 function MyTripsPage() {
+  const navigate = useNavigate();
+  const { trip: detailId } = Route.useSearch();
   const { driverId, user, isDriver, isDispatcher } = useAuth();
   const { t } = useI18n();
   const { data, isLoading } = useDriverTrips(driverId ?? undefined);
@@ -57,6 +65,11 @@ function MyTripsPage() {
   const pending = open.filter((row) => isDriverPendingTrip(row.status));
   const live = open.filter((row) => !isDriverPendingTrip(row.status));
   const past = sorted.filter((row) => ["completed", "cancelled", "breakdown"].includes(row.status));
+  const detailTrip = detailId ? (data ?? []).find((row) => row.id === detailId) : undefined;
+
+  function closeDetail() {
+    void navigate({ to: "/my-trips", search: {}, replace: true });
+  }
 
   return (
     <AppShell title={t("driver.trips.title")} subtitle={t("driver.trips.subtitle")}>
@@ -158,6 +171,16 @@ function MyTripsPage() {
           </Panel>
         )}
       </div>
+
+      {detailTrip ? (
+        <DriverTripPanel
+          trip={detailTrip}
+          open
+          onOpenChange={(next) => {
+            if (!next) closeDetail();
+          }}
+        />
+      ) : null}
     </AppShell>
   );
 }

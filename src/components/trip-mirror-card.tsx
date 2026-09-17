@@ -32,9 +32,9 @@ function MirrorShell({
   children,
   footer,
 }: {
-  to: "/trips" | "/requests/$requestId" | "/my-trips/$tripId";
-  params?: { requestId: string } | { tripId: string };
-  search?: { request: string };
+  to: "/trips" | "/requests" | "/my-trips";
+  params?: never;
+  search?: { request: string } | { trip: string };
   className?: string;
   emphasize?: boolean;
   children: ReactNode;
@@ -44,7 +44,6 @@ function MirrorShell({
     <div className={cn("trip-mirror", emphasize && "trip-mirror--hot", className)}>
       <Link
         to={to}
-        {...(params ? { params: params as never } : {})}
         {...(search ? { search } : {})}
         className="trip-mirror__main"
       >
@@ -110,7 +109,7 @@ export function RequestMirrorCard({
               Open
             </Link>
           ) : (
-            <Link to="/requests/$requestId" params={{ requestId: request.id }}>
+            <Link to="/requests" search={{ request: request.id }}>
               Open
             </Link>
           )}
@@ -123,8 +122,8 @@ export function RequestMirrorCard({
       {...(mode === "admin"
         ? { to: "/trips" as const, search: { request: request.id } }
         : {
-            to: "/requests/$requestId" as const,
-            params: { requestId: request.id },
+            to: "/requests" as const,
+            search: { request: request.id },
           })}
       {...(className ? { className } : {})}
       {...(footer ? { footer } : {})}
@@ -227,8 +226,8 @@ export function DriverTripMirrorCard({
 
   return (
     <MirrorShell
-      to="/my-trips/$tripId"
-      params={{ tripId: trip.id }}
+      to="/my-trips"
+      search={{ trip: trip.id }}
       {...(emphasize ? { emphasize: true } : {})}
       footer={footer}
     >

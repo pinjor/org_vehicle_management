@@ -25,23 +25,12 @@ import {
   useRequest,
   useTripHistory,
 } from "@/lib/queries";
+import { useNarrowDrawer } from "@/lib/use-narrow-drawer";
 import {
   trackFocusIndex,
   type RoutePoint,
   type TripLike,
 } from "@/lib/ride-detail";
-
-function useNarrowDrawer(breakpoint = 640) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
-    const sync = () => setNarrow(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, [breakpoint]);
-  return narrow;
-}
 
 /** Right-side request drawer — mount on /trips via search `request`. */
 export function AdminRideDetail({
