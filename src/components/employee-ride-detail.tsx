@@ -97,7 +97,7 @@ export function EmployeeRideDetail({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="ride-detail__reject-pill h-8 shrink-0"
+                className="ride-detail__reject-pill admin-req-drawer__cancel h-8 shrink-0"
                 disabled={cancel.isPending}
                 onClick={() =>
                   cancel.mutate(requestId, {

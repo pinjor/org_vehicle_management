@@ -10914,6 +10914,10 @@ a.admin-req__who-name:hover,
   margin-top: 0.2rem;
 }
 
+.admin-req-drawer__cancel {
+  margin-top: 1.75rem;
+}
+
 .admin-req-drawer__title {
   margin: 0;
   font-size: 1.05rem;
