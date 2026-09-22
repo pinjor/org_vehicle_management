@@ -206,6 +206,7 @@ export function KpiCard({
   tone = "neutral",
   icon,
   compact,
+  to,
 }: {
   label: string;
   value: ReactNode;
@@ -214,9 +215,11 @@ export function KpiCard({
   icon?: ReactNode;
   /** Single-row strip — less height for list-heavy pages */
   compact?: boolean;
+  /** When set, whole tile navigates (ops desk KPI strip). */
+  to?: ComponentProps<typeof Link>["to"];
 }) {
-  return (
-    <div className={cn("kpi-card", `kpi-card--${tone}`, compact && "kpi-card--compact")}>
+  const inner = (
+    <>
       <div className="kpi-card__top">
         <div className="kpi-card__copy">
           <p className="kpi-card__label">{label}</p>
@@ -229,8 +232,20 @@ export function KpiCard({
         )}
       </div>
       <p className="kpi-card__value">{value}</p>
-    </div>
+    </>
   );
+
+  const className = cn("kpi-card", `kpi-card--${tone}`, compact && "kpi-card--compact", to && "kpi-card--link");
+
+  if (to) {
+    return (
+      <Link to={to} className={className}>
+        {inner}
+      </Link>
+    );
+  }
+
+  return <div className={className}>{inner}</div>;
 }
 
 export function Panel({

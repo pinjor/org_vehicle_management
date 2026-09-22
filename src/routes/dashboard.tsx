@@ -9,30 +9,21 @@ import {
   FileWarning,
   Radar,
 } from "lucide-react";
-import { toast } from "sonner";
 import { DriverHomeIllustration } from "@/components/employee-home-illustration";
 import { EmployeeRideHome } from "@/components/employee-ride-home";
 import { AppShell } from "@/components/app-shell";
 import { DriverTripPreview } from "@/components/driver-trip-preview";
-import { AdminRequestCard } from "@/components/list-cards";
 import { PanelSkeleton } from "@/components/loading-skeletons";
 import {
-  DashModule,
   DashQuickActions,
-  DriverStatusModule,
-  FleetHealthModule,
   GlanceModule,
   LiveTripsModule,
-  MaintenanceModule,
+  PendingQueueModule,
   greetingForNow,
   todayLabel,
+  type GlanceTip,
 } from "@/components/ops-home-modules";
 import { ReportVehicleIssueDialog } from "@/components/report-vehicle-issue-dialog";
-import {
-  DualList,
-  RequestTableRow,
-  TripListTable,
-} from "@/components/trip-list-table";
 import {
   KpiCard,
   KpiGrid,
@@ -44,7 +35,6 @@ import { sortDispatchQueue, sortTripsList, isDriverPendingTrip } from "@/lib/fle
 import { useI18n } from "@/lib/i18n";
 import {
   useActiveTrips,
-  useDecideRequest,
   useDriverTrips,
   useDrivers,
   useRequests,
@@ -185,15 +175,14 @@ function DriverDashboard({ driverId, userId }: { driverId: string | null; userId
   );
 }
 
-/** Modular ops home — full boards live on /trips, /fleet, /maintenance. */
+/** Classic ops desk: KPIs → Pending | Live → alerts. Capacity lives in KPI strip. */
 function DispatcherDashboard() {
-  const { user, profile } = useAuth();
+  const { profile } = useAuth();
   const requests = useRequests();
   const trips = useActiveTrips();
   const vehicles = useVehicles();
   const drivers = useDrivers();
   const unavailability = useUnavailabilityRequests();
-  const decide = useDecideRequest();
   const [logOpen, setLogOpen] = useState(false);
 
   const firstName = profile?.full_name?.split(" ")[0] || "Admin";
@@ -208,59 +197,75 @@ function DispatcherDashboard() {
       sortDispatchQueue([...rows].filter((r) => ["submitted", "approved"].includes(r.status))),
     [rows],
   );
-  const preview = incoming.slice(0, 4);
-  const moreCount = Math.max(0, incoming.length - preview.length);
+  const preview = incoming.slice(0, 6);
 
   const liveTrips = useMemo(
     () =>
       (trips.data ?? []).filter((t) => !["completed", "cancelled", "breakdown"].includes(t.status)),
     [trips.data],
   );
-  const livePreview = liveTrips.slice(0, 5);
+  const livePreview = liveTrips.slice(0, 6);
 
   const availableVehicles = fleet.filter((v) => v.operational_status === "available");
   const maintenanceVehicles = fleet.filter((v) => v.operational_status === "under_maintenance");
-  const unavailableVehicles = fleet.filter((v) =>
-    ["unavailable", "out_of_service"].includes(v.operational_status),
-  );
-
   const availableDrivers = driverRows.filter((d) => d.current_status === "available");
-  const drivingDrivers = driverRows.filter((d) =>
-    ["driving", "reserved"].includes(d.current_status),
-  );
-  const awayDrivers = driverRows.filter((d) =>
-    ["leave", "off_duty", "unavailable", "suspended", "break"].includes(d.current_status),
-  );
-
   const pendingReports = maintRows.filter((r) => r.status === "pending");
-  const openMaint = maintRows.filter((r) =>
-    ["pending", "sent_to_maintenance", "approved_unavailable"].includes(r.status),
-  );
-  const maintPreview = openMaint.slice(0, 4);
 
-  const tips = useMemo(() => {
-    const out: string[] = [];
+  const tips = useMemo((): GlanceTip[] => {
+    const out: GlanceTip[] = [];
     if (incoming.length > 0) {
-      out.push(`${incoming.length} request${incoming.length === 1 ? "" : "s"} need assign`);
+      out.push({
+        id: "assign",
+        label: `${incoming.length} request${incoming.length === 1 ? "" : "s"} need assign`,
+        detail: "Open trips queue",
+        to: "/trips",
+        tone: "warn",
+      });
     }
     if (pendingReports.length > 0) {
-      out.push(
-        `${pendingReports.length} maintenance report${pendingReports.length === 1 ? "" : "s"} awaiting review`,
-      );
+      out.push({
+        id: "reports",
+        label: `${pendingReports.length} report${pendingReports.length === 1 ? "" : "s"} awaiting review`,
+        detail: "Open maintenance desk",
+        to: "/maintenance",
+        tone: "warn",
+      });
     }
     if (maintenanceVehicles.length > 0) {
-      out.push(
-        `${maintenanceVehicles.length} vehicle${maintenanceVehicles.length === 1 ? "" : "s"} in shop`,
-      );
+      out.push({
+        id: "shop",
+        label: `${maintenanceVehicles.length} vehicle${maintenanceVehicles.length === 1 ? "" : "s"} in shop`,
+        detail: "Open fleet",
+        to: "/fleet",
+        tone: "warn",
+      });
     }
     if (liveTrips.length > 0) {
-      out.push(`${liveTrips.length} trip${liveTrips.length === 1 ? "" : "s"} live now`);
+      out.push({
+        id: "live",
+        label: `${liveTrips.length} trip${liveTrips.length === 1 ? "" : "s"} live now`,
+        detail: "Track live trips",
+        to: "/trips",
+        tone: "info",
+      });
     }
     if (availableVehicles.length === 0 && fleet.length > 0) {
-      out.push("No free vehicles — check fleet or shop");
+      out.push({
+        id: "no-vehicles",
+        label: "No free vehicles",
+        detail: "Check fleet or shop",
+        to: "/fleet",
+        tone: "danger",
+      });
     }
     if (availableDrivers.length === 0 && driverRows.length > 0) {
-      out.push("No free drivers right now");
+      out.push({
+        id: "no-drivers",
+        label: "No free drivers",
+        detail: "Open drivers roster",
+        to: "/drivers",
+        tone: "danger",
+      });
     }
     return out.slice(0, 5);
   }, [
@@ -286,10 +291,25 @@ function DispatcherDashboard() {
         </header>
 
         <KpiGrid fit="auto" className="kpi-grid--compact shrink-0">
-          <KpiCard compact label="Pending" value={incoming.length} tone="warning" icon={<Clock />} />
-          <KpiCard compact label="Live" value={liveTrips.length} tone="info" icon={<Radar />} />
           <KpiCard
             compact
+            to="/trips"
+            label="Pending"
+            value={incoming.length}
+            tone="warning"
+            icon={<Clock />}
+          />
+          <KpiCard
+            compact
+            to="/trips"
+            label="Live"
+            value={liveTrips.length}
+            tone="info"
+            icon={<Radar />}
+          />
+          <KpiCard
+            compact
+            to="/fleet"
             label="Vehicles free"
             value={availableVehicles.length}
             tone="success"
@@ -297,6 +317,7 @@ function DispatcherDashboard() {
           />
           <KpiCard
             compact
+            to="/drivers"
             label="Drivers free"
             value={availableDrivers.length}
             tone="primary"
@@ -304,6 +325,7 @@ function DispatcherDashboard() {
           />
           <KpiCard
             compact
+            to="/fleet"
             label="In shop"
             value={maintenanceVehicles.length}
             tone="warning"
@@ -311,6 +333,7 @@ function DispatcherDashboard() {
           />
           <KpiCard
             compact
+            to="/maintenance"
             label="Reports"
             value={pendingReports.length}
             tone="danger"
@@ -319,111 +342,14 @@ function DispatcherDashboard() {
         </KpiGrid>
 
         <div className="dash-home__grid">
-          <DashQuickActions onLogIssue={() => setLogOpen(true)} />
-
-          <DashModule
-            title="Pending"
-            count={incoming.length}
-            action={
-              <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
-                <Link to="/trips">
-                  {moreCount > 0 ? `View all (+${moreCount})` : "Open trips"}
-                </Link>
-              </Button>
-            }
-            className="dash-mod--pending"
-            bodyClassName="dash-mod__body--list"
-          >
-            {requests.isLoading ? (
-              <PanelSkeleton rows={4} />
-            ) : preview.length === 0 ? (
-              <EmptyState
-                compact
-                title="Nothing pending"
-                description="New vehicle requests show up here for assign."
-              />
-            ) : (
-              <DualList
-                fill={false}
-                cards={
-                  <ul className="list-stagger space-y-2">
-                    {preview.map((r) => {
-                      const canReject = !!user && r.status === "submitted";
-                      return (
-                        <li key={r.id}>
-                          <AdminRequestCard
-                            request={r}
-                            trailing={
-                              canReject ? (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8"
-                                  disabled={decide.isPending}
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    if (!user) return;
-                                    decide.mutate(
-                                      { requestId: r.id, approve: false, actorId: user.id },
-                                      {
-                                        onSuccess: () => toast.success("Request rejected"),
-                                        onError: (err) => toast.error(err.message),
-                                      },
-                                    );
-                                  }}
-                                >
-                                  Reject
-                                </Button>
-                              ) : null
-                            }
-                          />
-                        </li>
-                      );
-                    })}
-                  </ul>
-                }
-                table={
-                  <div className="overflow-hidden rounded-lg border border-border">
-                    <TripListTable
-                      className="trip-list-board--pending"
-                      headers={["Time", "Employee", "Route", "Passengers", "Status"]}
-                    >
-                      {preview.map((r) => (
-                        <RequestTableRow key={r.id} request={r} showActions={false} />
-                      ))}
-                    </TripListTable>
-                  </div>
-                }
-              />
-            )}
-          </DashModule>
-
+          <PendingQueueModule
+            requests={preview}
+            total={incoming.length}
+            loading={requests.isLoading}
+          />
           <LiveTripsModule trips={livePreview} loading={trips.isLoading} />
-
-          <FleetHealthModule
-            total={fleet.length}
-            available={availableVehicles.length}
-            maintenance={maintenanceVehicles.length}
-            unavailable={unavailableVehicles.length}
-          />
-
-          <DriverStatusModule
-            total={driverRows.length}
-            available={availableDrivers.length}
-            driving={drivingDrivers.length}
-            away={awayDrivers.length}
-          />
-
-          <MaintenanceModule
-            pendingReports={pendingReports.length}
-            inShop={maintenanceVehicles.length}
-            preview={maintPreview}
-            loading={unavailability.isLoading}
-          />
-
           <GlanceModule tips={tips} />
+          <DashQuickActions onLogIssue={() => setLogOpen(true)} />
         </div>
       </div>
 
